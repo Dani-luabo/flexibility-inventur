@@ -1,7 +1,151 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+
+// ─── i18n ─────────────────────────────────────────────────────────────────────
+const translations = {
+  de: {
+    "splash.subtitle":          "Inventory Management",
+    "header.subtitle":          "Inventur 2026",
+    "header.nav.stock":         "Bestände",
+    "header.nav.deliveries":    "Lieferungen",
+    "header.addItem":           "+ Artikel",
+    "header.addItem.alert":     "Neuer Artikel — wird in einer späteren Version mit Supabase verbunden.",
+    "status.ok":                "OK",
+    "status.low":               "Niedrig",
+    "status.critical":          "Kritisch",
+    "status.out":               "Leer",
+    "filter.all":               "Alle Artikel",
+    "filter.incoming":          "Lieferungen",
+    "filter.empty":             "Keine Artikel in dieser Kategorie.",
+    "card.warehouse":           "Lager",
+    "card.fba":                 "FBA",
+    "card.total":               "Gesamt",
+    "card.minStock":            "Mindestbestand",
+    "card.pcs":                 "Stk.",
+    "card.arrival.prefix":      "+{qty} am",
+    "detail.save":              "Speichern",
+    "detail.edit":              "Bearbeiten",
+    "detail.cancel":            "Abbrechen",
+    "detail.kpi.warehouse":     "Lager",
+    "detail.kpi.fba":           "Amazon FBA",
+    "detail.kpi.total":         "Gesamt",
+    "detail.progress.label":    "Lagerstand vs. Mindestbestand",
+    "detail.progress.of":       "von",
+    "detail.section.master":    "Stammdaten",
+    "detail.section.stock":     "Bestände",
+    "detail.section.logistics": "Logistik",
+    "detail.field.name":        "Artikelname",
+    "detail.field.category":    "Kategorie",
+    "detail.field.sku":         "SKU",
+    "detail.field.asin":        "ASIN",
+    "detail.field.warehouse":   "Lager",
+    "detail.field.fba":         "Amazon FBA",
+    "detail.field.reserved":    "Reserviert",
+    "detail.field.minStock":    "Mindestbestand",
+    "detail.field.orderUnit":   "Bestelleinheit",
+    "detail.field.leadTime":    "Lieferzeit (Tage)",
+    "detail.field.arrivalDate": "Ankunft Datum",
+    "detail.field.arrivalQty":  "Ankunft Menge",
+    "detail.nextDelivery":      "📦 Nächste Lieferung",
+    "detail.delivery.date":     "Datum",
+    "detail.delivery.qty":      "Menge",
+    "detail.delivery.pcs":      "Stk.",
+    "detail.chart.title":       "Einkäufe vs. Verkäufe — 12 Monate",
+    "detail.chart.purchase":    "Einkauf",
+    "detail.chart.sales":       "Verkauf",
+    "detail.chart.trend":       "Trend",
+    "deliveries.empty":         "Keine Lieferungen geplant.",
+    "deliveries.col.qty":       "Menge",
+    "deliveries.col.current":   "Aktuell",
+    "deliveries.today":         "Heute",
+    "deliveries.tomorrow":      "Morgen",
+    "deliveries.inDays":        "in {n}d",
+  },
+  en: {
+    "splash.subtitle":          "Inventory Management",
+    "header.subtitle":          "Inventory 2026",
+    "header.nav.stock":         "Stock",
+    "header.nav.deliveries":    "Deliveries",
+    "header.addItem":           "+ Add Item",
+    "header.addItem.alert":     "New item — will be connected to Supabase in a future version.",
+    "status.ok":                "OK",
+    "status.low":               "Low",
+    "status.critical":          "Critical",
+    "status.out":               "Empty",
+    "filter.all":               "All Items",
+    "filter.incoming":          "Deliveries",
+    "filter.empty":             "No items in this category.",
+    "card.warehouse":           "Warehouse",
+    "card.fba":                 "FBA",
+    "card.total":               "Total",
+    "card.minStock":            "Min. stock",
+    "card.pcs":                 "pcs.",
+    "card.arrival.prefix":      "+{qty} on",
+    "detail.save":              "Save",
+    "detail.edit":              "Edit",
+    "detail.cancel":            "Cancel",
+    "detail.kpi.warehouse":     "Warehouse",
+    "detail.kpi.fba":           "Amazon FBA",
+    "detail.kpi.total":         "Total",
+    "detail.progress.label":    "Stock vs. Min. stock",
+    "detail.progress.of":       "of",
+    "detail.section.master":    "Master Data",
+    "detail.section.stock":     "Stock Levels",
+    "detail.section.logistics": "Logistics",
+    "detail.field.name":        "Item name",
+    "detail.field.category":    "Category",
+    "detail.field.sku":         "SKU",
+    "detail.field.asin":        "ASIN",
+    "detail.field.warehouse":   "Warehouse",
+    "detail.field.fba":         "Amazon FBA",
+    "detail.field.reserved":    "Reserved",
+    "detail.field.minStock":    "Min. stock",
+    "detail.field.orderUnit":   "Order unit",
+    "detail.field.leadTime":    "Lead time (days)",
+    "detail.field.arrivalDate": "Arrival date",
+    "detail.field.arrivalQty":  "Arrival qty.",
+    "detail.nextDelivery":      "📦 Next Delivery",
+    "detail.delivery.date":     "Date",
+    "detail.delivery.qty":      "Quantity",
+    "detail.delivery.pcs":      "pcs.",
+    "detail.chart.title":       "Purchases vs. Sales — 12 months",
+    "detail.chart.purchase":    "Purchase",
+    "detail.chart.sales":       "Sales",
+    "detail.chart.trend":       "Trend",
+    "deliveries.empty":         "No deliveries scheduled.",
+    "deliveries.col.qty":       "Quantity",
+    "deliveries.col.current":   "Current",
+    "deliveries.today":         "Today",
+    "deliveries.tomorrow":      "Tomorrow",
+    "deliveries.inDays":        "in {n}d",
+  },
+};
+
+// Monatsnamen für den Chart-XAxis (12 Monate zurück, endet im aktuellen Monat)
+const CHART_MONTHS = {
+  de: ["Jul", "Aug", "Sep", "Okt", "Nov", "Dez", "Jan", "Feb", "Mär", "Apr", "Mai", "Jun"],
+  en: ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+};
+
+// Datumsformatierung je Sprache
+const DATE_LOCALE = { de: "de-DE", en: "en-GB" };
+
+// ─── i18n Context ─────────────────────────────────────────────────────────────
+const LangContext = createContext({ lang: "de", t: (k) => k, setLang: () => {} });
+
+function useT() {
+  return useContext(LangContext);
+}
+
+function makeTFn(lang) {
+  return (key, vars = {}) => {
+    let str = translations[lang]?.[key] ?? translations.de[key] ?? key;
+    Object.entries(vars).forEach(([k, v]) => { str = str.replace(`{${k}}`, String(v)); });
+    return str;
+  };
+}
 
 // ─── Beispieldaten ───────────────────────────────────────────────────────────
 const initialProducts = [
@@ -13,15 +157,13 @@ const initialProducts = [
   { id: "SKU-006", name: "Webcam Full HD",             asin: "B04MNO2345", lager: 17,  amazon_fba: 22, amazon_reserved: 8,  bestelleinheit: 30,  lieferzeit_tage: 18, ankunft: "2026-06-20", ankunft_menge: 30,  min_bestand: 15,  kategorie: "Elektronik" },
 ];
 
-// Platzhalterdaten für den Verkaufshistorie-Chart
-const generateChartData = () => {
-  const monate = ["Jul", "Aug", "Sep", "Okt", "Nov", "Dez", "Jan", "Feb", "Mär", "Apr", "Mai", "Jun"];
-  return monate.map((m) => ({
-    monat: m,
+// Chart-Daten mit numerischen Monats-Indizes damit Labels live übersetzt werden können
+const generateChartData = () =>
+  Array.from({ length: 12 }, (_, i) => ({
+    monthIdx: i,
     einkauf: Math.floor(Math.random() * 120) + 20,
     verkauf: Math.floor(Math.random() * 100) + 10,
   }));
-};
 
 // ─── Status-Logik ─────────────────────────────────────────────────────────────
 function getStatus(p) {
@@ -32,11 +174,12 @@ function getStatus(p) {
   return "ok";
 }
 
+// Kein label mehr hier — wird per t('status.xxx') übersetzt
 const STATUS_CONFIG = {
-  ok:       { label: "OK",       color: "#4ade80", bg: "rgba(74,222,128,0.15)", icon: "✓" },
-  low:      { label: "Niedrig",  color: "#facc15", bg: "rgba(250,204,21,0.15)",  icon: "⚠" },
-  critical: { label: "Kritisch", color: "#f87171", bg: "rgba(248,113,113,0.15)", icon: "✕" },
-  out:      { label: "Leer",     color: "#ef4444", bg: "rgba(239,68,68,0.12)",   icon: "●" },
+  ok:       { labelKey: "status.ok",       color: "#4ade80", bg: "rgba(74,222,128,0.15)", icon: "✓" },
+  low:      { labelKey: "status.low",      color: "#facc15", bg: "rgba(250,204,21,0.15)",  icon: "⚠" },
+  critical: { labelKey: "status.critical", color: "#f87171", bg: "rgba(248,113,113,0.15)", icon: "✕" },
+  out:      { labelKey: "status.out",      color: "#ef4444", bg: "rgba(239,68,68,0.12)",   icon: "●" },
 };
 
 // ─── Design-Tokens ────────────────────────────────────────────────────────────
@@ -74,14 +217,10 @@ function SplashScreen({ onDone }) {
         return p + 2;
       });
     }, 45);
-
     const hold = setTimeout(() => setPhase("out"), 2500);
     const done = setTimeout(() => onDone(), 3100);
-
     return () => { clearInterval(interval); clearTimeout(hold); clearTimeout(done); };
   }, [onDone]);
-
-  const opacity = phase === "out" ? 0 : 1;
 
   return (
     <div style={{
@@ -89,9 +228,8 @@ function SplashScreen({ onDone }) {
       background: T.bg,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       transition: "opacity 0.6s ease",
-      opacity,
+      opacity: phase === "out" ? 0 : 1,
     }}>
-      {/* Logo */}
       <div style={{
         width: 96, height: 96, borderRadius: "50%",
         background: "#0d2b27",
@@ -103,42 +241,22 @@ function SplashScreen({ onDone }) {
         <svg width="52" height="52" viewBox="0 0 52 52">
           <line x1="10" y1="10" x2="42" y2="42" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
           <line x1="42" y1="10" x2="10" y2="42" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
-          <line x1="8" y1="26" x2="44" y2="26" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+          <line x1="8"  y1="26" x2="44" y2="26" stroke="white" strokeWidth="2"   strokeLinecap="round" opacity="0.7" />
         </svg>
       </div>
-
-      {/* Firmenname */}
       <div style={{
         fontFamily: "Georgia, 'Times New Roman', serif",
-        fontSize: 26,
-        fontWeight: 400,
-        letterSpacing: "0.35em",
-        color: T.text,
-        textTransform: "uppercase",
-        marginBottom: 10,
+        fontSize: 26, fontWeight: 400, letterSpacing: "0.35em",
+        color: T.text, textTransform: "uppercase", marginBottom: 10,
       }}>
         Flexibility
       </div>
-
-      {/* Untertitel */}
-      <div style={{
-        fontSize: 13,
-        color: T.textDim,
-        letterSpacing: "0.08em",
-        marginBottom: 52,
-      }}>
+      <div style={{ fontSize: 13, color: T.textDim, letterSpacing: "0.08em", marginBottom: 52 }}>
         Inventory Management
       </div>
-
-      {/* Ladebalken */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        height: 3,
-        background: "rgba(255,255,255,0.08)",
-      }}>
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(255,255,255,0.08)" }}>
         <div style={{
-          height: "100%",
-          width: `${progress}%`,
+          height: "100%", width: `${progress}%`,
           background: `linear-gradient(90deg, ${T.accent}, #86efac)`,
           transition: "width 0.05s linear",
           boxShadow: `0 0 12px ${T.accent}`,
@@ -148,7 +266,7 @@ function SplashScreen({ onDone }) {
   );
 }
 
-// ─── Flexibility Logo (klein, für Header) ─────────────────────────────────────
+// ─── Flexibility Logo (Header) ────────────────────────────────────────────────
 function FlexLogo({ size = 40 }) {
   return (
     <div style={{
@@ -159,16 +277,45 @@ function FlexLogo({ size = 40 }) {
       flexShrink: 0,
     }}>
       <svg width={size * 0.52} height={size * 0.52} viewBox="0 0 52 52">
-        <line x1="10" y1="10" x2="42" y2="42" stroke="white" strokeWidth="4" strokeLinecap="round" />
-        <line x1="42" y1="10" x2="10" y2="42" stroke="white" strokeWidth="4" strokeLinecap="round" />
-        <line x1="8" y1="26" x2="44" y2="26" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.65" />
+        <line x1="10" y1="10" x2="42" y2="42" stroke="white" strokeWidth="4"   strokeLinecap="round" />
+        <line x1="42" y1="10" x2="10" y2="42" stroke="white" strokeWidth="4"   strokeLinecap="round" />
+        <line x1="8"  y1="26" x2="44" y2="26" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.65" />
       </svg>
+    </div>
+  );
+}
+
+// ─── Sprach-Umschalter ────────────────────────────────────────────────────────
+function LangToggle() {
+  const { lang, setLang } = useT();
+  return (
+    <div style={{
+      display: "flex", borderRadius: 8, overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.12)",
+    }}>
+      {["de", "en"].map((l) => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          style={{
+            padding: "6px 12px", border: "none", cursor: "pointer",
+            background: lang === l ? T.accentDim : "transparent",
+            color: lang === l ? T.accent : T.textDim,
+            fontSize: 11, fontWeight: 700, fontFamily: "Inter, sans-serif",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+            transition: "all 0.15s",
+          }}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
     </div>
   );
 }
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status, small = false }) {
+  const { t } = useT();
   const cfg = STATUS_CONFIG[status];
   return (
     <span style={{
@@ -183,22 +330,19 @@ function StatusBadge({ status, small = false }) {
       letterSpacing: "0.03em",
       textShadow: `0 0 8px ${cfg.color}80`,
     }}>
-      {cfg.icon} {cfg.label}
+      {cfg.icon} {t(cfg.labelKey)}
     </span>
   );
 }
 
 // ─── Fortschrittsbalken ───────────────────────────────────────────────────────
 function ProgressBar({ value, max, status, showPercent = false }) {
+  const { t } = useT();
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   const color = STATUS_CONFIG[status]?.color ?? T.accent;
   return (
     <div>
-      <div style={{
-        height: 5, borderRadius: 99,
-        background: "rgba(255,255,255,0.08)",
-        overflow: "hidden",
-      }}>
+      <div style={{ height: 5, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
         <div style={{
           width: `${pct}%`, height: "100%",
           background: color,
@@ -209,7 +353,7 @@ function ProgressBar({ value, max, status, showPercent = false }) {
       </div>
       {showPercent && (
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: T.textDim }}>
-          <span>{value} von {max}</span>
+          <span>{value} {t("detail.progress.of")} {max}</span>
           <span style={{ color }}>{pct}%</span>
         </div>
       )}
@@ -219,6 +363,7 @@ function ProgressBar({ value, max, status, showPercent = false }) {
 
 // ─── Artikel-Karte ────────────────────────────────────────────────────────────
 function ProductCard({ product, onClick }) {
+  const { t, lang } = useT();
   const [hovered, setHovered] = useState(false);
   const status = getStatus(product);
   const total = product.lager + product.amazon_fba;
@@ -260,11 +405,11 @@ function ProductCard({ product, onClick }) {
       {/* Bestandszahlen */}
       <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
         {[
-          { label: "Lager",  value: product.lager },
-          { label: "FBA",    value: product.amazon_fba },
-          { label: "Gesamt", value: total, accent: true },
-        ].map(({ label, value, accent }) => (
-          <div key={label} style={{ flex: 1, textAlign: "center" }}>
+          { labelKey: "card.warehouse", value: product.lager },
+          { labelKey: "card.fba",       value: product.amazon_fba },
+          { labelKey: "card.total",     value: total, accent: true },
+        ].map(({ labelKey, value, accent }) => (
+          <div key={labelKey} style={{ flex: 1, textAlign: "center" }}>
             <div style={{
               fontSize: accent ? 22 : 18,
               fontWeight: 700,
@@ -274,7 +419,7 @@ function ProductCard({ product, onClick }) {
             }}>
               {value}
             </div>
-            <div style={{ fontSize: 10, color: T.textDim, marginTop: 3, letterSpacing: "0.04em" }}>{label}</div>
+            <div style={{ fontSize: 10, color: T.textDim, marginTop: 3, letterSpacing: "0.04em" }}>{t(labelKey)}</div>
           </div>
         ))}
       </div>
@@ -282,7 +427,7 @@ function ProductCard({ product, onClick }) {
       {/* Fortschrittsbalken */}
       <ProgressBar value={total} max={product.min_bestand} status={status} />
       <div style={{ fontSize: 10, color: T.textDim, marginTop: 5 }}>
-        Mindestbestand: {product.min_bestand} Stk.
+        {t("card.minStock")}: {product.min_bestand} {t("card.pcs")}
       </div>
 
       {/* Ankunfts-Pill */}
@@ -294,7 +439,7 @@ function ProductCard({ product, onClick }) {
           borderRadius: 99, padding: "3px 10px",
           fontSize: 11, color: T.accent,
         }}>
-          📦 +{product.ankunft_menge} am {new Date(product.ankunft).toLocaleDateString("de-DE", { day: "2-digit", month: "short" })}
+          📦 {t("card.arrival.prefix", { qty: product.ankunft_menge })} {new Date(product.ankunft).toLocaleDateString(DATE_LOCALE[lang], { day: "2-digit", month: "short" })}
         </div>
       )}
     </div>
@@ -303,6 +448,7 @@ function ProductCard({ product, onClick }) {
 
 // ─── Detail-Panel ─────────────────────────────────────────────────────────────
 function DetailPanel({ product, onClose, onSave }) {
+  const { t, lang } = useT();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...product });
   const [chartData] = useState(generateChartData);
@@ -315,6 +461,7 @@ function DetailPanel({ product, onClose, onSave }) {
   const status = getStatus(form);
   const total = form.lager + form.amazon_fba;
 
+  // Hilfsfunktion für editierbare Felder — label ist bereits übersetzt
   const field = (label, key, type = "text") => (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, letterSpacing: "0.04em" }}>{label}</div>
@@ -338,7 +485,7 @@ function DetailPanel({ product, onClose, onSave }) {
     </div>
   );
 
-  // Trend: letzter Monat vs. vorletzter
+  // Verkaufs-Trend: letzter Monat vs. vorletzter
   const last2 = chartData.slice(-2);
   const trend = last2.length === 2
     ? Math.round(((last2[1].verkauf - last2[0].verkauf) / (last2[0].verkauf || 1)) * 100)
@@ -346,25 +493,17 @@ function DetailPanel({ product, onClose, onSave }) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, zIndex: 100,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
-      />
+      <div onClick={onClose} style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+      }} />
 
-      {/* Panel */}
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0,
-        width: "min(580px, 100vw)",
-        zIndex: 101,
+        width: "min(580px, 100vw)", zIndex: 101,
         background: "rgba(13,28,22,0.97)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
         borderLeft: "1px solid rgba(255,255,255,0.10)",
         display: "flex", flexDirection: "column",
         animation: "slideIn 0.25s ease",
@@ -380,13 +519,11 @@ function DetailPanel({ product, onClose, onSave }) {
 
         {/* Sticky Header */}
         <div style={{
-          padding: "20px 24px",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)",
           display: "flex", alignItems: "center", gap: 12,
           position: "sticky", top: 0,
           background: "rgba(13,28,22,0.97)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
+          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
           zIndex: 1,
         }}>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: T.textDim, width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
@@ -405,12 +542,12 @@ function DetailPanel({ product, onClose, onSave }) {
               transition: "all 0.15s",
             }}
           >
-            {editing ? "Speichern" : "Bearbeiten"}
+            {editing ? t("detail.save") : t("detail.edit")}
           </button>
           {editing && (
             <button onClick={() => { setForm({ ...product }); setEditing(false); }}
               style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 13, fontFamily: "Inter, sans-serif" }}>
-              Abbrechen
+              {t("detail.cancel")}
             </button>
           )}
         </div>
@@ -419,48 +556,48 @@ function DetailPanel({ product, onClose, onSave }) {
           {/* KPI Karten */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
             {[
-              { label: "Lager",      value: form.lager,      color: T.text },
-              { label: "Amazon FBA", value: form.amazon_fba, color: T.text },
-              { label: "Gesamt",     value: total,           color: STATUS_CONFIG[status].color },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{ ...glass({ padding: "14px 16px", textAlign: "center" }) }}>
+              { labelKey: "detail.kpi.warehouse", value: form.lager,      color: T.text },
+              { labelKey: "detail.kpi.fba",       value: form.amazon_fba, color: T.text },
+              { labelKey: "detail.kpi.total",      value: total,           color: STATUS_CONFIG[status].color },
+            ].map(({ labelKey, value, color }) => (
+              <div key={labelKey} style={{ ...glass({ padding: "14px 16px", textAlign: "center" }) }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: 11, color: T.textDim, marginTop: 5 }}>{label}</div>
+                <div style={{ fontSize: 11, color: T.textDim, marginTop: 5 }}>{t(labelKey)}</div>
               </div>
             ))}
           </div>
 
           {/* Fortschrittsbalken */}
           <div style={{ ...glass({ padding: "16px 18px" }), marginBottom: 24 }}>
-            <div style={{ fontSize: 13, color: T.textDim, marginBottom: 10 }}>Lagerstand vs. Mindestbestand</div>
+            <div style={{ fontSize: 13, color: T.textDim, marginBottom: 10 }}>{t("detail.progress.label")}</div>
             <ProgressBar value={total} max={form.min_bestand} status={status} showPercent />
           </div>
 
           {/* Stammdaten */}
-          <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14 }}>Stammdaten</div>
+          <SectionLabel>{t("detail.section.master")}</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-            {field("Artikelname", "name")}
-            {field("Kategorie", "kategorie")}
-            {field("SKU", "id")}
-            {field("ASIN", "asin")}
+            {field(t("detail.field.name"),     "name")}
+            {field(t("detail.field.category"), "kategorie")}
+            {field(t("detail.field.sku"),      "id")}
+            {field(t("detail.field.asin"),     "asin")}
           </div>
 
           {/* Bestände */}
-          <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14, marginTop: 8 }}>Bestände</div>
+          <SectionLabel>{t("detail.section.stock")}</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-            {field("Lager", "lager", "number")}
-            {field("Amazon FBA", "amazon_fba", "number")}
-            {field("Reserviert", "amazon_reserved", "number")}
-            {field("Mindestbestand", "min_bestand", "number")}
+            {field(t("detail.field.warehouse"), "lager",           "number")}
+            {field(t("detail.field.fba"),       "amazon_fba",      "number")}
+            {field(t("detail.field.reserved"),  "amazon_reserved", "number")}
+            {field(t("detail.field.minStock"),  "min_bestand",     "number")}
           </div>
 
           {/* Logistik */}
-          <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14, marginTop: 8 }}>Logistik</div>
+          <SectionLabel>{t("detail.section.logistics")}</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-            {field("Bestelleinheit", "bestelleinheit", "number")}
-            {field("Lieferzeit (Tage)", "lieferzeit_tage", "number")}
-            {field("Ankunft Datum", "ankunft", "date")}
-            {field("Ankunft Menge", "ankunft_menge", "number")}
+            {field(t("detail.field.orderUnit"),   "bestelleinheit",  "number")}
+            {field(t("detail.field.leadTime"),    "lieferzeit_tage", "number")}
+            {field(t("detail.field.arrivalDate"), "ankunft",         "date")}
+            {field(t("detail.field.arrivalQty"),  "ankunft_menge",   "number")}
           </div>
 
           {/* Nächste Lieferung */}
@@ -471,17 +608,17 @@ function DetailPanel({ product, onClose, onSave }) {
               borderColor: "rgba(74,222,128,0.25)",
               background: "rgba(74,222,128,0.07)",
             }}>
-              <div style={{ fontSize: 12, color: T.accent, fontWeight: 600, marginBottom: 6 }}>📦 Nächste Lieferung</div>
+              <div style={{ fontSize: 12, color: T.accent, fontWeight: 600, marginBottom: 6 }}>{t("detail.nextDelivery")}</div>
               <div style={{ display: "flex", gap: 20 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: T.textDim }}>Datum</div>
+                  <div style={{ fontSize: 11, color: T.textDim }}>{t("detail.delivery.date")}</div>
                   <div style={{ fontSize: 14, color: T.text, marginTop: 2 }}>
-                    {new Date(form.ankunft).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}
+                    {new Date(form.ankunft).toLocaleDateString(DATE_LOCALE[lang], { day: "2-digit", month: "long", year: "numeric" })}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: T.textDim }}>Menge</div>
-                  <div style={{ fontSize: 14, color: T.accent, fontWeight: 700, marginTop: 2 }}>+{form.ankunft_menge} Stk.</div>
+                  <div style={{ fontSize: 11, color: T.textDim }}>{t("detail.delivery.qty")}</div>
+                  <div style={{ fontSize: 14, color: T.accent, fontWeight: 700, marginTop: 2 }}>+{form.ankunft_menge} {t("detail.delivery.pcs")}</div>
                 </div>
               </div>
             </div>
@@ -489,24 +626,29 @@ function DetailPanel({ product, onClose, onSave }) {
 
           {/* Chart: Einkäufe vs. Verkäufe */}
           <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14 }}>
-            Einkäufe vs. Verkäufe — 12 Monate
+            {t("detail.chart.title")}
             <span style={{ marginLeft: 10, color: trend >= 0 ? T.accent : "#f87171", fontWeight: 600, textTransform: "none", fontSize: 12 }}>
-              {trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}% Trend
+              {trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}% {t("detail.chart.trend")}
             </span>
           </div>
           <div style={{ ...glass({ padding: "16px 8px" }) }}>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData} margin={{ top: 0, right: 8, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="monat" tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <XAxis
+                  dataKey="monthIdx"
+                  tickFormatter={(i) => CHART_MONTHS[lang][i]}
+                  tick={{ fill: T.textDim, fontSize: 11 }}
+                  axisLine={false} tickLine={false}
+                />
                 <YAxis tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: "#0d2b22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: T.text, fontSize: 12 }}
                   cursor={{ fill: "rgba(255,255,255,0.04)" }}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: T.textDim }} />
-                <Bar dataKey="einkauf" name="Einkauf" fill="rgba(74,222,128,0.7)" radius={[3,3,0,0]} />
-                <Bar dataKey="verkauf" name="Verkauf" fill="rgba(96,165,250,0.7)" radius={[3,3,0,0]} />
+                <Bar dataKey="einkauf" name={t("detail.chart.purchase")} fill="rgba(74,222,128,0.7)"  radius={[3,3,0,0]} />
+                <Bar dataKey="verkauf" name={t("detail.chart.sales")}    fill="rgba(96,165,250,0.7)"  radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -516,8 +658,19 @@ function DetailPanel({ product, onClose, onSave }) {
   );
 }
 
+// Kleiner Hilfskomponent für Abschnitts-Überschriften im Panel
+function SectionLabel({ children }) {
+  return (
+    <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14, marginTop: 8 }}>
+      {children}
+    </div>
+  );
+}
+
 // ─── Status-Ampel ─────────────────────────────────────────────────────────────
 function StatusFilter({ products, active, onChange }) {
+  const { t } = useT();
+
   const counts = {
     all:      products.length,
     ok:       products.filter(p => getStatus(p) === "ok").length,
@@ -528,17 +681,17 @@ function StatusFilter({ products, active, onChange }) {
   };
 
   const filters = [
-    { key: "all",      label: "Alle Artikel", icon: "≡",  count: counts.all },
-    { key: "ok",       label: "OK",           icon: "✓",  count: counts.ok,       color: "#4ade80" },
-    { key: "low",      label: "Niedrig",      icon: "⚠",  count: counts.low,      color: "#facc15" },
-    { key: "critical", label: "Kritisch",     icon: "✕",  count: counts.critical, color: "#f87171" },
-    { key: "out",      label: "Leer",         icon: "●",  count: counts.out,      color: "#ef4444" },
-    { key: "incoming", label: "Lieferungen",  icon: "📦", count: counts.incoming, color: "#60a5fa" },
+    { key: "all",      labelKey: "filter.all",      icon: "≡",  count: counts.all },
+    { key: "ok",       labelKey: "status.ok",       icon: "✓",  count: counts.ok,       color: "#4ade80" },
+    { key: "low",      labelKey: "status.low",      icon: "⚠",  count: counts.low,      color: "#facc15" },
+    { key: "critical", labelKey: "status.critical", icon: "✕",  count: counts.critical, color: "#f87171" },
+    { key: "out",      labelKey: "status.out",      icon: "●",  count: counts.out,      color: "#ef4444" },
+    { key: "incoming", labelKey: "filter.incoming", icon: "📦", count: counts.incoming, color: "#60a5fa" },
   ];
 
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "16px 24px" }}>
-      {filters.map(({ key, label, icon, count, color }) => {
+      {filters.map(({ key, labelKey, icon, count, color }) => {
         const isActive = active === key;
         return (
           <button
@@ -557,7 +710,7 @@ function StatusFilter({ products, active, onChange }) {
             }}
           >
             <span>{icon}</span>
-            <span>{label}</span>
+            <span>{t(labelKey)}</span>
             <span style={{
               background: isActive ? (color ? `${color}33` : T.accentDim) : "rgba(255,255,255,0.08)",
               color: isActive ? (color || T.accent) : T.textDim,
@@ -574,6 +727,8 @@ function StatusFilter({ products, active, onChange }) {
 
 // ─── Lieferungen Tab ──────────────────────────────────────────────────────────
 function LieferungenView({ products, onSelect }) {
+  const { t, lang } = useT();
+
   const incoming = products
     .filter(p => p.ankunft)
     .sort((a, b) => new Date(a.ankunft) - new Date(b.ankunft));
@@ -581,7 +736,7 @@ function LieferungenView({ products, onSelect }) {
   if (incoming.length === 0) {
     return (
       <div style={{ textAlign: "center", color: T.textDim, padding: "80px 24px" }}>
-        Keine Lieferungen geplant.
+        {t("deliveries.empty")}
       </div>
     );
   }
@@ -592,6 +747,12 @@ function LieferungenView({ products, onSelect }) {
         const status = getStatus(p);
         const total = p.lager + p.amazon_fba;
         const daysUntil = Math.ceil((new Date(p.ankunft) - new Date()) / 86400000);
+        const daysLabel = daysUntil === 0
+          ? t("deliveries.today")
+          : daysUntil === 1
+            ? t("deliveries.tomorrow")
+            : t("deliveries.inDays", { n: daysUntil });
+
         return (
           <div
             key={p.id}
@@ -612,19 +773,19 @@ function LieferungenView({ products, onSelect }) {
             </div>
             <div style={{ textAlign: "center", minWidth: 60 }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: T.accent }}>+{p.ankunft_menge}</div>
-              <div style={{ fontSize: 10, color: T.textDim }}>Menge</div>
+              <div style={{ fontSize: 10, color: T.textDim }}>{t("deliveries.col.qty")}</div>
             </div>
             <div style={{ textAlign: "center", minWidth: 80 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
-                {new Date(p.ankunft).toLocaleDateString("de-DE", { day: "2-digit", month: "short" })}
+                {new Date(p.ankunft).toLocaleDateString(DATE_LOCALE[lang], { day: "2-digit", month: "short" })}
               </div>
               <div style={{ fontSize: 11, color: daysUntil <= 3 ? "#facc15" : T.textDim }}>
-                {daysUntil === 0 ? "Heute" : daysUntil === 1 ? "Morgen" : `in ${daysUntil}d`}
+                {daysLabel}
               </div>
             </div>
             <div style={{ textAlign: "center", minWidth: 60 }}>
               <div style={{ fontSize: 14, color: T.text }}>{total}</div>
-              <div style={{ fontSize: 10, color: T.textDim }}>Aktuell</div>
+              <div style={{ fontSize: 10, color: T.textDim }}>{t("deliveries.col.current")}</div>
             </div>
             <StatusBadge status={status} small />
           </div>
@@ -641,13 +802,16 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("bestaende");
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [lang, setLang] = useState("de");
+
+  // t-Funktion wird bei Sprachwechsel neu erzeugt
+  const t = useMemo(() => makeTFn(lang), [lang]);
 
   const handleSave = useCallback((updated) => {
     setProducts(ps => ps.map(p => p.id === updated.id ? updated : p));
     setSelectedProduct(updated);
   }, []);
 
-  // Gefilterte Artikel nach aktivem Status-Filter
   const filtered = products.filter(p => {
     if (activeFilter === "all") return true;
     if (activeFilter === "incoming") return !!p.ankunft;
@@ -659,97 +823,102 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, sans-serif", color: T.text }}>
+    <LangContext.Provider value={{ lang, t, setLang }}>
+      <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, sans-serif", color: T.text }}>
 
-      {/* ── Header ── */}
-      <header style={{
-        position: "sticky", top: 0, zIndex: 50,
-        backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-        background: "rgba(6,18,16,0.85)",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        padding: "12px 24px",
-        display: "flex", alignItems: "center", gap: 14,
-      }}>
-        <FlexLogo size={40} />
-        <div style={{ lineHeight: 1.2 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.04em" }}>Flexibility</div>
-          <div style={{ fontSize: 11, color: T.textDim }}>Inventur 2026</div>
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {/* Navigation */}
-        <div style={{ display: "flex", gap: 6 }}>
-          {[
-            { key: "bestaende",   label: "Bestände" },
-            { key: "lieferungen", label: "Lieferungen" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              style={{
-                padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: activeTab === key ? T.accentDim : "transparent",
-                color: activeTab === key ? T.accent : T.textDim,
-                fontSize: 13, fontWeight: 500, fontFamily: "Inter, sans-serif",
-                transition: "all 0.15s",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Neuer Artikel — Struktur für Supabase-Integration vorbereitet */}
-        <button
-          onClick={() => alert("Neuer Artikel — wird in einer späteren Version mit Supabase verbunden.")}
-          style={{
-            padding: "8px 16px", borderRadius: 9, border: `1px solid ${T.accent}55`,
-            background: T.accentDim, color: T.accent,
-            fontSize: 13, fontWeight: 600, fontFamily: "Inter, sans-serif",
-            cursor: "pointer", transition: "all 0.15s",
-          }}
-        >
-          + Artikel
-        </button>
-      </header>
-
-      {/* ── Seiten-Inhalt ── */}
-      {activeTab === "bestaende" ? (
-        <>
-          <StatusFilter products={products} active={activeFilter} onChange={setActiveFilter} />
-          <div style={{
-            padding: "0 24px 32px",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
-            gap: 16,
-          }}>
-            {filtered.length === 0 ? (
-              <div style={{ gridColumn: "1/-1", textAlign: "center", color: T.textDim, padding: "60px 0" }}>
-                Keine Artikel in dieser Kategorie.
-              </div>
-            ) : (
-              filtered.map(p => (
-                <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
-              ))
-            )}
+        {/* ── Header ── */}
+        <header style={{
+          position: "sticky", top: 0, zIndex: 50,
+          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+          background: "rgba(6,18,16,0.85)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          padding: "12px 24px",
+          display: "flex", alignItems: "center", gap: 14,
+        }}>
+          <FlexLogo size={40} />
+          <div style={{ lineHeight: 1.2 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.04em" }}>Flexibility</div>
+            <div style={{ fontSize: 11, color: T.textDim }}>{t("header.subtitle")}</div>
           </div>
-        </>
-      ) : (
-        <LieferungenView
-          products={products}
-          onSelect={(p) => { setSelectedProduct(p); setActiveTab("bestaende"); }}
-        />
-      )}
 
-      {/* ── Detail-Panel ── */}
-      {selectedProduct && (
-        <DetailPanel
-          product={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
-          onSave={handleSave}
-        />
-      )}
-    </div>
+          <div style={{ flex: 1 }} />
+
+          {/* Navigation */}
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              { key: "bestaende",   labelKey: "header.nav.stock" },
+              { key: "lieferungen", labelKey: "header.nav.deliveries" },
+            ].map(({ key, labelKey }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                style={{
+                  padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: activeTab === key ? T.accentDim : "transparent",
+                  color: activeTab === key ? T.accent : T.textDim,
+                  fontSize: 13, fontWeight: 500, fontFamily: "Inter, sans-serif",
+                  transition: "all 0.15s",
+                }}
+              >
+                {t(labelKey)}
+              </button>
+            ))}
+          </div>
+
+          {/* DE/EN Umschalter */}
+          <LangToggle />
+
+          {/* Neuer Artikel — Struktur für Supabase-Integration vorbereitet */}
+          <button
+            onClick={() => alert(t("header.addItem.alert"))}
+            style={{
+              padding: "8px 16px", borderRadius: 9, border: `1px solid ${T.accent}55`,
+              background: T.accentDim, color: T.accent,
+              fontSize: 13, fontWeight: 600, fontFamily: "Inter, sans-serif",
+              cursor: "pointer", transition: "all 0.15s",
+            }}
+          >
+            {t("header.addItem")}
+          </button>
+        </header>
+
+        {/* ── Seiten-Inhalt ── */}
+        {activeTab === "bestaende" ? (
+          <>
+            <StatusFilter products={products} active={activeFilter} onChange={setActiveFilter} />
+            <div style={{
+              padding: "0 24px 32px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+              gap: 16,
+            }}>
+              {filtered.length === 0 ? (
+                <div style={{ gridColumn: "1/-1", textAlign: "center", color: T.textDim, padding: "60px 0" }}>
+                  {t("filter.empty")}
+                </div>
+              ) : (
+                filtered.map(p => (
+                  <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
+                ))
+              )}
+            </div>
+          </>
+        ) : (
+          <LieferungenView
+            products={products}
+            onSelect={(p) => { setSelectedProduct(p); setActiveTab("bestaende"); }}
+          />
+        )}
+
+        {/* ── Detail-Panel ── */}
+        {selectedProduct && (
+          <DetailPanel
+            product={selectedProduct}
+            onClose={() => setSelectedProduct(null)}
+            onSave={handleSave}
+          />
+        )}
+      </div>
+    </LangContext.Provider>
   );
 }
