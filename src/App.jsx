@@ -147,6 +147,16 @@ function makeTFn(lang) {
   };
 }
 
+function useWindowWidth() {
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return width;
+}
+
 // ─── Beispieldaten ───────────────────────────────────────────────────────────
 const initialProducts = [
   { id: "SKU-001", name: "Bluetooth Kopfhörer Pro",  asin: "B08XYZ1234", lager: 142, amazon_fba: 38, amazon_reserved: 5,  bestelleinheit: 50,  lieferzeit_tage: 14, ankunft: "2026-06-18", ankunft_menge: 100, min_bestand: 30,  kategorie: "Elektronik" },
@@ -803,6 +813,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("bestaende");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [lang, setLang] = useState("de");
+  const isMobile = useWindowWidth() < 640;
 
   // t-Funktion wird bei Sprachwechsel neu erzeugt
   const t = useMemo(() => makeTFn(lang), [lang]);
@@ -832,54 +843,69 @@ export default function App() {
           backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
           background: "rgba(6,18,16,0.85)",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
-          padding: "12px 24px",
-          display: "flex", alignItems: "center", gap: 14,
+          padding: isMobile ? "10px 16px" : "12px 24px",
+          display: "flex", flexWrap: "wrap", alignItems: "center",
+          gap: isMobile ? 8 : 14,
         }}>
+          {/* Zeile 1: Logo + Brand + (mobile: LangToggle) */}
           <FlexLogo size={40} />
-          <div style={{ lineHeight: 1.2 }}>
+          <div style={{ lineHeight: 1.2, flex: isMobile ? 1 : "initial" }}>
             <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.04em" }}>Flexibility</div>
-            <div style={{ fontSize: 11, color: T.textDim }}>{t("header.subtitle")}</div>
+            {!isMobile && <div style={{ fontSize: 11, color: T.textDim }}>{t("header.subtitle")}</div>}
           </div>
 
-          <div style={{ flex: 1 }} />
+          {/* Spacer — nur auf Desktop */}
+          {!isMobile && <div style={{ flex: 1 }} />}
 
-          {/* Navigation */}
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              { key: "bestaende",   labelKey: "header.nav.stock" },
-              { key: "lieferungen", labelKey: "header.nav.deliveries" },
-            ].map(({ key, labelKey }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                style={{
-                  padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                  background: activeTab === key ? T.accentDim : "transparent",
-                  color: activeTab === key ? T.accent : T.textDim,
-                  fontSize: 13, fontWeight: 500, fontFamily: "Inter, sans-serif",
-                  transition: "all 0.15s",
-                }}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
+          {/* DE/EN Umschalter — auf Mobile in Zeile 1 ganz rechts */}
+          {isMobile && <LangToggle />}
+
+          {/* Zeile 2 auf Mobile / inline auf Desktop: Navigation + Add-Button */}
+          <div style={{
+            display: "flex", gap: 6, alignItems: "center",
+            width: isMobile ? "100%" : "auto",
+            justifyContent: isMobile ? "space-between" : "initial",
+          }}>
+            <div style={{ display: "flex", gap: isMobile ? 2 : 6 }}>
+              {[
+                { key: "bestaende",   labelKey: "header.nav.stock" },
+                { key: "lieferungen", labelKey: "header.nav.deliveries" },
+              ].map(({ key, labelKey }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  style={{
+                    padding: isMobile ? "7px 12px" : "7px 16px",
+                    borderRadius: 8, border: "none", cursor: "pointer",
+                    background: activeTab === key ? T.accentDim : "transparent",
+                    color: activeTab === key ? T.accent : T.textDim,
+                    fontSize: isMobile ? 12 : 13, fontWeight: 500,
+                    fontFamily: "Inter, sans-serif", transition: "all 0.15s",
+                  }}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+
+            {/* DE/EN Umschalter — auf Desktop zwischen Nav und Add-Button */}
+            {!isMobile && <LangToggle />}
+
+            {/* Neuer Artikel — Struktur für Supabase-Integration vorbereitet */}
+            <button
+              onClick={() => alert(t("header.addItem.alert"))}
+              style={{
+                padding: isMobile ? "7px 12px" : "8px 16px",
+                borderRadius: 9, border: `1px solid ${T.accent}55`,
+                background: T.accentDim, color: T.accent,
+                fontSize: isMobile ? 12 : 13, fontWeight: 600,
+                fontFamily: "Inter, sans-serif", cursor: "pointer",
+                transition: "all 0.15s", whiteSpace: "nowrap",
+              }}
+            >
+              {isMobile ? "+" : t("header.addItem")}
+            </button>
           </div>
-
-          {/* DE/EN Umschalter */}
-          <LangToggle />
-
-          {/* Neuer Artikel — Struktur für Supabase-Integration vorbereitet */}
-          <button
-            onClick={() => alert(t("header.addItem.alert"))}
-            style={{
-              padding: "8px 16px", borderRadius: 9, border: `1px solid ${T.accent}55`,
-              background: T.accentDim, color: T.accent,
-              fontSize: 13, fontWeight: 600, fontFamily: "Inter, sans-serif",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-          >
-            {t("header.addItem")}
-          </button>
         </header>
 
         {/* ── Seiten-Inhalt ── */}
