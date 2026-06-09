@@ -1,6 +1,12 @@
 -- ─── Flexibility Inventur — Supabase Schema ──────────────────────────────────
 -- Run this in the Supabase SQL Editor (Project → SQL Editor → New query)
 
+-- ─── DISABLE RLS ON ALL TABLES (run this first if you get RLS errors) ────────
+ALTER TABLE products      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE deliveries    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_history DISABLE ROW LEVEL SECURITY;
+ALTER TABLE settings      DISABLE ROW LEVEL SECURITY;
+
 create table if not exists products (
   id               text primary key,           -- SKU, e.g. "SKU-001"
   name             text        not null,
@@ -14,6 +20,8 @@ create table if not exists products (
   ankunft          date,
   ankunft_menge    integer     not null default 0,
   min_bestand      integer     not null default 0,
+  meldebestand_fba integer     not null default 0,
+  nachschub_menge  integer     not null default 0,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -32,12 +40,7 @@ create trigger set_updated_at
   before update on products
   for each row execute function handle_updated_at();
 
--- Row Level Security (open policy — add auth checks when ready)
-alter table products enable row level security;
-
-drop policy if exists "public_all" on products;
-create policy "public_all" on products
-  for all using (true) with check (true);
+-- RLS is disabled — see top of file
 
 -- ─── Seed data (the 6 example products) ──────────────────────────────────────
 insert into products
@@ -51,3 +54,65 @@ values
   ('SKU-005', 'Schreibtisch-Organizer',   'B05JKL7890', 'Büro',       210, 85, 10, 100, 7,  null,         0,   40),
   ('SKU-006', 'Webcam Full HD',           'B04MNO2345', 'Elektronik', 17,  22, 8,  30,  18, '2026-06-20', 30,  15)
 on conflict (id) do nothing;
+
+-- ─── Deliveries table (Wareneingang) ─────────────────────────────────────────
+create table if not exists deliveries (
+  id                uuid        default gen_random_uuid() primary key,
+  product_id        text        references products(id),
+  arrival_date      date,
+  ordered_quantity  integer     not null default 0,
+  received_quantity integer     not null default 0,
+  received_date     date,
+  created_at        timestamptz not null default now()
+);
+
+-- RLS is disabled — see top of file
+
+-- ─── Migration: add reorder alert columns (run if table already exists) ─────
+alter table products add column if not exists meldebestand_fba integer not null default 0;
+alter table products add column if not exists nachschub_menge  integer not null default 0;
+
+-- ─── Settings table (key/value store for credentials & config) ────────────────
+create table if not exists settings (
+  key        text primary key,
+  value      text not null,
+  updated_at timestamptz not null default now()
+);
+
+-- RLS is disabled — see top of file
+
+drop trigger if exists settings_updated_at on settings;
+create trigger settings_updated_at
+  before update on settings
+  for each row execute function handle_updated_at();
+
+-- ─── Migration: tags, notes, lagerort, einkaufspreis, image_url, image_data ──
+ALTER TABLE products ADD COLUMN IF NOT EXISTS tags         text[]  DEFAULT '{}';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS notes        text;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS lagerort     text;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS einkaufspreis numeric DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url    text;
+-- image_data stores base64-encoded JPEG (resized to max 600px client-side)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_data   text;
+
+-- ─── Stock History table ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS stock_history (
+  id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  product_id  text        REFERENCES products(id) ON DELETE CASCADE,
+  field       text        NOT NULL,
+  old_value   integer     NOT NULL DEFAULT 0,
+  new_value   integer     NOT NULL DEFAULT 0,
+  reason      text,
+  changed_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE stock_history DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS stock_history_product_id_idx ON stock_history(product_id, changed_at DESC);
+
+-- ─── Migration: delivery date fields ─────────────────────────────────────────
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS order_date date;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS planned_arrival_date date;
+
+-- ─── Migration: purchase price per delivery ───────────────────────────────────
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS einkaufspreis_pro_stueck numeric;
