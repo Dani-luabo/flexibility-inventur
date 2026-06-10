@@ -2750,7 +2750,8 @@ export default function App() {
   const [correctionProduct,    setCorrectionProduct]    = useState(null);
   const [fbaTransfers,         setFbaTransfers]         = useState({});
   const [dismissedAlerts,      setDismissedAlerts]      = useState(() => new Set());
-  const [lang,            setLang]            = useState("de");
+  const [lang, setLangState] = useState(() => localStorage.getItem("lang") ?? "de");
+  const setLang = (l) => { setLangState(l); localStorage.setItem("lang", l); };
   const [searchQuery,     setSearchQuery]     = useState("");
   const [activeTag,       setActiveTag]       = useState(null);
   const [showStats,       setShowStats]       = useState(false);
