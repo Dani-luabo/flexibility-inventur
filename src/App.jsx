@@ -192,6 +192,10 @@ const translations = {
     "image.upload":             "Bild hochladen",
     "image.uploading":          "Lädt hoch...",
     "image.change":             "Bild ändern",
+    "image.delete":             "Bild löschen",
+    "image.deleteConfirm":      "Bild wirklich löschen?",
+    "image.deleteYes":          "Löschen",
+    "image.deleteNo":           "Abbrechen",
     "history.reason.manual":    "Manuell",
     "history.reason.receipt":   "Wareneingang",
     "history.reason.fba":       "Zu Amazon FBA gesendet",
@@ -417,6 +421,10 @@ const translations = {
     "image.upload":             "Upload image",
     "image.uploading":          "Uploading...",
     "image.change":             "Change image",
+    "image.delete":             "Delete image",
+    "image.deleteConfirm":      "Really delete image?",
+    "image.deleteYes":          "Delete",
+    "image.deleteNo":           "Cancel",
     "history.reason.manual":    "Manual",
     "history.reason.receipt":   "Goods Receipt",
     "history.reason.fba":       "Sent to Amazon FBA",
@@ -1129,10 +1137,12 @@ function DetailPanel({ product, onClose, onSave, onFbaTransfer, onStockCorrectio
   const [scanning,       setScanning]       = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [tagInput,       setTagInput]       = useState("");
-  const [confirmingId,   setConfirmingId]   = useState(null);
-  const [confirmedQty,   setConfirmedQty]   = useState(0);
-  const [confirmSaving,  setConfirmSaving]  = useState(false);
-  const [confirmError,   setConfirmError]   = useState(null);
+  const [confirmingId,      setConfirmingId]      = useState(null);
+  const [confirmedQty,      setConfirmedQty]      = useState(0);
+  const [confirmSaving,     setConfirmSaving]     = useState(false);
+  const [confirmError,      setConfirmError]      = useState(null);
+  const [imageDeleteConfirm, setImageDeleteConfirm] = useState(false);
+  const [imageDeletingState, setImageDeletingState] = useState(false);
   const { history, loading: histLoading }   = useStockHistory(product.id);
   const { shipments, loading: shipmentsLoading, reload: reloadShipments } = useFbaShipments(product.id);
 
@@ -1256,16 +1266,50 @@ function DetailPanel({ product, onClose, onSave, onFbaTransfer, onStockCorrectio
           )}
 
           {/* Produktbild — always clickable, no edit mode required */}
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20, gap: 10 }}>
             {(form.image_data || form.image_url) ? (
-              <label className="img-hover-wrap" style={{ position: "relative", display: "inline-block", cursor: "pointer" }}>
-                <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleImageUpload} disabled={imageUploading} />
-                <img src={form.image_data || form.image_url} style={{ width: 160, height: 160, objectFit: "cover", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", display: "block" }} alt="" />
-                <div className="img-hover-overlay" style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", borderRadius: 12, gap: 6 }}>
-                  <span style={{ fontSize: 20 }}>📷</span>
-                  <span style={{ fontSize: 11, color: "white", fontWeight: 600 }}>{imageUploading ? t("image.uploading") : t("image.change")}</span>
-                </div>
-              </label>
+              <>
+                <label className="img-hover-wrap" style={{ position: "relative", display: "inline-block", cursor: "pointer" }}>
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleImageUpload} disabled={imageUploading} />
+                  <img src={form.image_data || form.image_url} style={{ width: 160, height: 160, objectFit: "cover", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", display: "block" }} alt="" />
+                  <div className="img-hover-overlay" style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", borderRadius: 12, gap: 6 }}>
+                    <span style={{ fontSize: 20 }}>📷</span>
+                    <span style={{ fontSize: 11, color: "white", fontWeight: 600 }}>{imageUploading ? t("image.uploading") : t("image.change")}</span>
+                  </div>
+                </label>
+                {imageDeleteConfirm ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, ...glass({ padding: "8px 12px" }), borderColor: "rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.07)" }}>
+                    <span style={{ fontSize: 12, color: "#f87171" }}>{t("image.deleteConfirm")}</span>
+                    <button
+                      disabled={imageDeletingState}
+                      onClick={async () => {
+                        setImageDeletingState(true);
+                        const { error } = await supabase.from("products").update({ image_data: null }).eq("id", form.id);
+                        if (error) console.error("[DB] image delete FAILED", error.message);
+                        setForm(f => ({ ...f, image_data: null, image_url: "" }));
+                        setImageDeleteConfirm(false);
+                        setImageDeletingState(false);
+                      }}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, border: "none", background: "#f87171", color: "#fff", cursor: imageDeletingState ? "default" : "pointer", opacity: imageDeletingState ? 0.6 : 1, fontFamily: "Inter, sans-serif" }}
+                    >
+                      {imageDeletingState ? "…" : t("image.deleteYes")}
+                    </button>
+                    <button
+                      onClick={() => setImageDeleteConfirm(false)}
+                      style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: T.textDim, cursor: "pointer", fontFamily: "Inter, sans-serif" }}
+                    >
+                      {t("image.deleteNo")}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setImageDeleteConfirm(true)}
+                    style={{ fontSize: 11, color: "#f87171", background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px", fontFamily: "Inter, sans-serif", opacity: 0.7 }}
+                  >
+                    🗑 {t("image.delete")}
+                  </button>
+                )}
+              </>
             ) : (
               <label style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: 100, height: 100, borderRadius: 12, border: `2px dashed ${T.accent}55`, cursor: imageUploading ? "default" : "pointer", background: T.accentDim, gap: 6, transition: "all 0.2s" }}
                 onMouseEnter={e => { if (!imageUploading) { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = "rgba(74,222,128,0.2)"; } }}
