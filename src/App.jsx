@@ -2506,6 +2506,7 @@ function StockCorrectionModal({ product, onClose, onCorrect }) {
 // ─── Lieferungen Tab ──────────────────────────────────────────────────────────
 function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook }) {
   const { t, lang } = useT();
+  const isMobile = useWindowWidth() < 640;
   const incoming = products.filter(p => p.ankunft).sort((a, b) => new Date(a.ankunft) - new Date(b.ankunft));
 
   const addButton = (
@@ -2534,15 +2535,15 @@ function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook
   }
 
   return (
-    <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ padding: isMobile ? "12px 12px" : "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>{addButton}</div>
       {incoming.map(p => {
-        const rec        = deliveries.find(d => d.product_id === p.id && d.arrival_date === p.ankunft);
-        const wreStatus  = getWreStatus(deliveries, p.id, p.ankunft, p.ankunft_menge);
-        const total      = p.lager + p.amazon_fba;
-        const isBooked   = wreStatus === "complete" || wreStatus === "discrepancy";
-        const received   = rec?.received_quantity ?? 0;
-        const ordered    = p.ankunft_menge;
+        const rec          = deliveries.find(d => d.product_id === p.id && d.arrival_date === p.ankunft);
+        const wreStatus    = getWreStatus(deliveries, p.id, p.ankunft, p.ankunft_menge);
+        const total        = p.lager + p.amazon_fba;
+        const isBooked     = wreStatus === "complete" || wreStatus === "discrepancy";
+        const received     = rec?.received_quantity ?? 0;
+        const ordered      = p.ankunft_menge;
         const showReceived = received > 0;
 
         const fmtDate = (dateStr) => dateStr
@@ -2552,24 +2553,89 @@ function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook
         const plannedDateStr = fmtDate(rec?.planned_arrival_date);
         const arrivedDateStr = fmtDate(rec?.received_date);
 
+        const bookBtn = (
+          <button
+            onClick={e => { e.stopPropagation(); onBook(p); }}
+            style={{ padding: "5px 11px", borderRadius: 7, border: `1px solid ${isBooked ? "rgba(255,255,255,0.12)" : T.accent + "55"}`, background: isBooked ? "rgba(255,255,255,0.05)" : T.accentDim, color: isBooked ? T.textDim : T.accent, fontSize: 11, fontWeight: 600, fontFamily: "Inter, sans-serif", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}
+          >
+            {isBooked ? t("wre.book.correct") : t("wre.book.button")}
+          </button>
+        );
+
+        if (isMobile) {
+          return (
+            <div key={p.id} style={{ ...glass({ padding: "14px 14px" }) }}>
+              {/* Row 1: icon + name + SKU */}
+              <div onClick={() => onSelect(p)} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, cursor: "pointer" }}>
+                <div style={{ fontSize: 22, flexShrink: 0 }}>📦</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: T.textDim, fontFamily: "monospace", marginTop: 1 }}>{p.id}</div>
+                </div>
+              </div>
+
+              {/* Row 2: qty */}
+              <div style={{ marginBottom: 10 }}>
+                {showReceived ? (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: received === ordered ? "#4ade80" : "#fb923c" }}>{received}</span>
+                    <span style={{ fontSize: 12, color: T.textDim }}>{t("deliveries.received")}</span>
+                    <span style={{ fontSize: 12, color: T.textDim }}>— {t("deliveries.orderedOf", { qty: ordered })}</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: "#60a5fa" }}>+{ordered}</span>
+                    <span style={{ fontSize: 12, color: T.textDim }}>{t("deliveries.expected")}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 3: dates */}
+              {(orderDateStr || plannedDateStr || arrivedDateStr) && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 12 }}>
+                  {orderDateStr && (
+                    <div style={{ fontSize: 12, color: T.textDim }}>
+                      {t("deliveries.orderDate")} <span style={{ color: T.text, fontWeight: 600 }}>{orderDateStr}</span>
+                    </div>
+                  )}
+                  {plannedDateStr && (
+                    <div style={{ fontSize: 12, color: T.textDim }}>
+                      {t("deliveries.plannedDate")} <span style={{ color: "#60a5fa", fontWeight: 600 }}>{plannedDateStr}</span>
+                    </div>
+                  )}
+                  {arrivedDateStr && (
+                    <div style={{ fontSize: 12, color: T.textDim }}>
+                      {t("deliveries.arrivedDate")} <span style={{ color: "#4ade80", fontWeight: 600 }}>{arrivedDateStr}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 4: status badge + book button */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                <WreStatusBadge status={wreStatus} />
+                {bookBtn}
+              </div>
+            </div>
+          );
+        }
+
+        // ── Desktop layout (unchanged) ──────────────────────────────────────
         return (
           <div key={p.id}
             style={{ ...glass({ padding: "14px 18px" }), display: "flex", alignItems: "center", gap: 14, transition: "all 0.15s" }}
           >
-            {/* Clickable area → opens detail */}
             <div onClick={() => onSelect(p)} style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0, cursor: "pointer" }}
               onMouseEnter={e => e.currentTarget.parentElement.style.background = T.glassHover}
               onMouseLeave={e => e.currentTarget.parentElement.style.background = T.glass}
             >
               <div style={{ fontSize: 26, width: 36, textAlign: "center", flexShrink: 0 }}>📦</div>
 
-              {/* Name + SKU */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                 <div style={{ fontSize: 11, color: T.textDim, fontFamily: "monospace", marginTop: 1 }}>{p.id}</div>
               </div>
 
-              {/* Qty column — received (main) or expected */}
               <div style={{ textAlign: "center", minWidth: 64, flexShrink: 0 }}>
                 {showReceived ? (
                   <>
@@ -2585,7 +2651,6 @@ function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook
                 )}
               </div>
 
-              {/* Date column */}
               <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 130, flexShrink: 0 }}>
                 {orderDateStr && (
                   <div style={{ fontSize: 11, color: T.textDim }}>
@@ -2604,22 +2669,15 @@ function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook
                 )}
               </div>
 
-              {/* Current stock */}
               <div style={{ textAlign: "center", minWidth: 48, flexShrink: 0 }}>
                 <div style={{ fontSize: 13, color: T.text }}>{total}</div>
                 <div style={{ fontSize: 10, color: T.textDim }}>{t("deliveries.col.current")}</div>
               </div>
             </div>
 
-            {/* Status + book button */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
               <WreStatusBadge status={wreStatus} />
-              <button
-                onClick={e => { e.stopPropagation(); onBook(p); }}
-                style={{ padding: "5px 11px", borderRadius: 7, border: `1px solid ${isBooked ? "rgba(255,255,255,0.12)" : T.accent + "55"}`, background: isBooked ? "rgba(255,255,255,0.05)" : T.accentDim, color: isBooked ? T.textDim : T.accent, fontSize: 11, fontWeight: 600, fontFamily: "Inter, sans-serif", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}
-              >
-                {isBooked ? t("wre.book.correct") : t("wre.book.button")}
-              </button>
+              {bookBtn}
             </div>
           </div>
         );
