@@ -176,9 +176,14 @@ const translations = {
     "stats.totalWarehouse":     "Lager gesamt",
     "stats.totalFBA":           "Amazon FBA gesamt",
     "stats.deliveriesMonth":    "Lieferungen diesen Monat",
+    "stats.deliveriesYear":     "Lieferungen {year}",
+    "stats.purchasesYear":      "Einkaufswert {year}",
     "stats.critical":           "Kritisch / Leer",
     "stats.currency":           "€",
     "stats.units":              "Stk.",
+    "stats.exportCsv":          "Export CSV",
+    "stats.exporting":          "Exportiert...",
+    "year.filter":              "Jahr",
     "search.placeholder":       "Name, SKU, ASIN, Tags suchen...",
     "search.match.name":        "Name",
     "search.match.sku":         "SKU",
@@ -405,9 +410,14 @@ const translations = {
     "stats.totalWarehouse":     "Total Warehouse",
     "stats.totalFBA":           "Total Amazon FBA",
     "stats.deliveriesMonth":    "Deliveries this month",
+    "stats.deliveriesYear":     "Deliveries {year}",
+    "stats.purchasesYear":      "Purchase value {year}",
     "stats.critical":           "Critical / Empty",
     "stats.currency":           "€",
     "stats.units":              "pcs.",
+    "stats.exportCsv":          "Export CSV",
+    "stats.exporting":          "Exporting...",
+    "year.filter":              "Year",
     "search.placeholder":       "Search name, SKU, ASIN, tags...",
     "search.match.name":        "Name",
     "search.match.sku":         "SKU",
@@ -943,6 +953,30 @@ function FlexLogo({ size = 40 }) {
   );
 }
 
+// ─── Jahr-Selektor ────────────────────────────────────────────────────────────
+const FIRST_YEAR = 2024;
+function YearSelector({ year, onChange, compact = false }) {
+  const now = new Date().getFullYear();
+  const years = [];
+  for (let y = FIRST_YEAR; y <= now; y++) years.push(y);
+  const navBtn = (disabled, onClick, label) => (
+    <button onClick={onClick} disabled={disabled} style={{ padding: compact ? "2px 5px" : "3px 7px", borderRadius: 6, border: "none", background: "transparent", color: disabled ? "rgba(255,255,255,0.18)" : T.textDim, cursor: disabled ? "default" : "pointer", fontSize: compact ? 12 : 13, fontFamily: "Inter, sans-serif", lineHeight: 1 }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 1, background: "rgba(255,255,255,0.04)", borderRadius: 99, padding: "2px 3px", border: "1px solid rgba(255,255,255,0.09)" }}>
+      {navBtn(year <= FIRST_YEAR, () => onChange(year - 1), "‹")}
+      {years.map(y => (
+        <button key={y} onClick={() => onChange(y)} style={{ padding: compact ? "2px 7px" : "3px 9px", borderRadius: 99, border: "none", cursor: "pointer", background: y === year ? T.accentDim : "transparent", color: y === year ? T.accent : T.textDim, fontSize: compact ? 11 : 12, fontWeight: y === year ? 700 : 500, fontFamily: "Inter, sans-serif", transition: "all 0.12s" }}>
+          {y}
+        </button>
+      ))}
+      {navBtn(year >= now, () => onChange(year + 1), "›")}
+    </div>
+  );
+}
+
 // ─── Sprach-Umschalter ────────────────────────────────────────────────────────
 function LangToggle() {
   const { lang, setLang } = useT();
@@ -1143,6 +1177,7 @@ function DetailPanel({ product, onClose, onSave, onFbaTransfer, onStockCorrectio
   const [confirmError,      setConfirmError]      = useState(null);
   const [imageDeleteConfirm, setImageDeleteConfirm] = useState(false);
   const [imageDeletingState, setImageDeletingState] = useState(false);
+  const [histYear,           setHistYear]           = useState(new Date().getFullYear());
   const { history, loading: histLoading }   = useStockHistory(product.id);
   const { shipments, loading: shipmentsLoading, reload: reloadShipments } = useFbaShipments(product.id);
 
@@ -1612,33 +1647,39 @@ function DetailPanel({ product, onClose, onSave, onFbaTransfer, onStockCorrectio
           </div>
 
           {/* ── Lager-Verlauf ── */}
-          <SectionLabel>{t("detail.history.title")}</SectionLabel>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("detail.history.title")}</div>
+            <YearSelector year={histYear} onChange={setHistYear} compact />
+          </div>
           <div style={{ ...glass({ padding: "14px 16px" }) }}>
             {histLoading ? (
               <div style={{ color: T.textDim, fontSize: 12 }}>…</div>
-            ) : history.length === 0 ? (
-              <div style={{ color: T.textDim, fontSize: 12 }}>{t("detail.history.empty")}</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {history.map(entry => {
-                  const d = new Date(entry.changed_at);
-                  const dateStr = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
-                    + " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-                  const fieldLabel = entry.field === "lager" ? t("detail.kpi.warehouse") : "FBA";
-                  const isIncrease = entry.new_value > entry.old_value;
-                  return (
-                    <div key={entry.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 8px", fontSize: 12 }}>
-                      <span style={{ color: T.textDim, fontSize: 10, fontFamily: "monospace", whiteSpace: "nowrap" }}>{dateStr}</span>
-                      <span style={{ color: T.text }}>{fieldLabel}:</span>
-                      <span style={{ color: T.textDim }}>{entry.old_value}</span>
-                      <span style={{ color: T.textDim }}>→</span>
-                      <span style={{ color: isIncrease ? "#4ade80" : "#f87171", fontWeight: 700 }}>{entry.new_value}</span>
-                      {entry.reason && <span style={{ color: T.textDim, fontSize: 10, background: "rgba(255,255,255,0.06)", padding: "1px 6px", borderRadius: 4 }}>{entry.reason}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            ) : (() => {
+              const filtered = history.filter(e => new Date(e.changed_at).getFullYear() === histYear);
+              return filtered.length === 0 ? (
+                <div style={{ color: T.textDim, fontSize: 12 }}>{t("detail.history.empty")}</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {filtered.map(entry => {
+                    const d = new Date(entry.changed_at);
+                    const dateStr = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+                      + " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                    const fieldLabel = entry.field === "lager" ? t("detail.kpi.warehouse") : "FBA";
+                    const isIncrease = entry.new_value > entry.old_value;
+                    return (
+                      <div key={entry.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 8px", fontSize: 12 }}>
+                        <span style={{ color: T.textDim, fontSize: 10, fontFamily: "monospace", whiteSpace: "nowrap" }}>{dateStr}</span>
+                        <span style={{ color: T.text }}>{fieldLabel}:</span>
+                        <span style={{ color: T.textDim }}>{entry.old_value}</span>
+                        <span style={{ color: T.textDim }}>→</span>
+                        <span style={{ color: isIncrease ? "#4ade80" : "#f87171", fontWeight: 700 }}>{entry.new_value}</span>
+                        {entry.reason && <span style={{ color: T.textDim, fontSize: 10, background: "rgba(255,255,255,0.06)", padding: "1px 6px", borderRadius: 4 }}>{entry.reason}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1841,38 +1882,142 @@ function StatusFilter({ products, active, onChange, searchQuery, onSearch, activ
 // ─── Stats Modal ─────────────────────────────────────────────────────────────
 function StatsModal({ products, deliveries, onClose }) {
   const { t } = useT();
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const currentYear    = new Date().getFullYear();
+  const [year,         setYear]      = useState(currentYear);
+  const [exporting,    setExporting] = useState(false);
+
+  const yearStart = `${year}-01-01`;
+  const yearEnd   = `${year + 1}-01-01`;
+
+  const yearDeliveries = deliveries.filter(d => {
+    const dt = d.arrival_date ?? d.received_date ?? "";
+    return dt >= yearStart && dt < yearEnd;
+  });
 
   const totalWarehouse = products.reduce((s, p) => s + p.lager, 0);
   const totalFBA       = products.reduce((s, p) => s + p.amazon_fba, 0);
   const totalValue     = products.reduce((s, p) => s + (p.lager + p.amazon_fba) * (p.einkaufspreis ?? 0), 0);
   const criticalCount  = products.filter(p => { const st = getStatus(p); return st === "critical" || st === "out"; }).length;
-  const delivThisMonth = deliveries.filter(d => (d.arrival_date ?? d.received_date ?? "") >= monthStart).length;
+  const delivCount     = yearDeliveries.length;
+  const purchasesValue = yearDeliveries.reduce((s, d) => {
+    const qty   = d.received_quantity ?? d.ordered_quantity ?? 0;
+    const price = d.einkaufspreis_pro_stueck ?? 0;
+    return s + qty * price;
+  }, 0);
+
+  const fmt = n => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const stats = [
-    { labelKey: "stats.totalValue",       value: `${totalValue.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t("stats.currency")}`, color: T.accent },
-    { labelKey: "stats.totalWarehouse",   value: `${totalWarehouse.toLocaleString()} ${t("stats.units")}`,   color: T.text },
-    { labelKey: "stats.totalFBA",         value: `${totalFBA.toLocaleString()} ${t("stats.units")}`,         color: "#60a5fa" },
-    { labelKey: "stats.deliveriesMonth",  value: delivThisMonth,                                               color: "#fb923c" },
-    { labelKey: "stats.critical",         value: criticalCount,                                                color: criticalCount > 0 ? "#f87171" : "#4ade80" },
+    { labelKey: "stats.totalValue",     value: `${fmt(totalValue)} €`,       color: T.accent  },
+    { labelKey: "stats.totalWarehouse", value: `${totalWarehouse.toLocaleString()} Stk.`, color: T.text  },
+    { labelKey: "stats.totalFBA",       value: `${totalFBA.toLocaleString()} Stk.`,       color: "#60a5fa" },
+    { labelKey: "stats.deliveriesYear", value: delivCount,                    color: "#fb923c", tplYear: year },
+    { labelKey: "stats.purchasesYear",  value: `${fmt(purchasesValue)} €`,   color: "#a78bfa", tplYear: year },
+    { labelKey: "stats.critical",       value: criticalCount,                 color: criticalCount > 0 ? "#f87171" : "#4ade80" },
   ];
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const [{ data: shipments }, { data: histData }] = await Promise.all([
+        supabase.from("fba_shipments").select("*").gte("created_at", yearStart).lt("created_at", yearEnd).order("created_at"),
+        supabase.from("stock_history").select("*").gte("changed_at", yearStart).lt("changed_at", yearEnd).order("changed_at"),
+      ]);
+
+      const pMap = Object.fromEntries(products.map(p => [p.id, p]));
+
+      const csvRow = cells => cells.map(c => {
+        const s = String(c ?? "");
+        return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(";");
+
+      const lines = [];
+      const sep   = () => lines.push("");
+
+      // Products
+      lines.push(`=== PRODUKTE (Stand ${year}) ===`);
+      lines.push(csvRow(["SKU","Name","Kategorie","Lager","Amazon FBA","Gesamt","Einkaufspreis (€)","Gesamtwert (€)"]));
+      products.forEach(p => {
+        const tot = p.lager + p.amazon_fba;
+        lines.push(csvRow([p.id, p.name, p.kategorie, p.lager, p.amazon_fba, tot, fmt(p.einkaufspreis ?? 0), fmt(tot * (p.einkaufspreis ?? 0))]));
+      });
+      sep();
+
+      // Deliveries
+      lines.push(`=== LIEFERUNGEN ${year} ===`);
+      lines.push(csvRow(["Datum","SKU","Produkt","Bestellt","Erhalten","Preis/Stk (€)","Gesamtwert (€)"]));
+      yearDeliveries.forEach(d => {
+        const pr = d.einkaufspreis_pro_stueck ?? 0;
+        const qty = d.received_quantity ?? d.ordered_quantity ?? 0;
+        lines.push(csvRow([d.arrival_date ?? d.received_date ?? "", d.product_id, pMap[d.product_id]?.name ?? "", d.ordered_quantity ?? 0, d.received_quantity ?? 0, fmt(pr), fmt(qty * pr)]));
+      });
+      sep();
+
+      // FBA Shipments
+      lines.push(`=== FBA SENDUNGEN ${year} ===`);
+      lines.push(csvRow(["Datum","SKU","Tracking","Gesendet","Bestätigt","Status"]));
+      (shipments ?? []).forEach(s => {
+        lines.push(csvRow([s.sent_date ?? "", s.product_id, s.tracking_reference ?? "", s.sent_quantity, s.confirmed_quantity ?? "", s.status]));
+      });
+      sep();
+
+      // Stock History
+      lines.push(`=== LAGER-VERLAUF ${year} ===`);
+      lines.push(csvRow(["Datum","SKU","Feld","Alt","Neu","Grund"]));
+      (histData ?? []).forEach(h => {
+        lines.push(csvRow([new Date(h.changed_at).toLocaleDateString("de-DE"), h.product_id, h.field, h.old_value, h.new_value, h.reason ?? ""]));
+      });
+      sep();
+
+      // Summary
+      lines.push(`=== ZUSAMMENFASSUNG ${year} ===`);
+      lines.push(csvRow(["Gesamtwert Inventar (€)", fmt(totalValue)]));
+      lines.push(csvRow(["Einkaufswert Lieferungen (€)", fmt(purchasesValue)]));
+      lines.push(csvRow(["Anzahl Lieferungen", delivCount]));
+      lines.push(csvRow(["Kritische / Leere Artikel", criticalCount]));
+
+      const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = `Inventur_${year}_FlexX.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error("CSV export failed:", e); }
+    setExporting(false);
+  };
 
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "min(460px, 92vw)", ...glass({ padding: "28px" }), border: "1px solid rgba(255,255,255,0.15)", borderRadius: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "min(480px, 92vw)", ...glass({ padding: "24px" }), border: "1px solid rgba(255,255,255,0.15)", borderRadius: 16 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("stats.title")}</div>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: T.textDim, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <YearSelector year={year} onChange={setYear} />
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: T.textDim, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {stats.map(({ labelKey, value, color }) => (
-            <div key={labelKey} style={{ ...glass({ padding: "16px" }), borderRadius: 12 }}>
+
+        {/* Stats grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          {stats.map(({ labelKey, value, color, tplYear }) => (
+            <div key={labelKey} style={{ ...glass({ padding: "14px 16px" }), borderRadius: 12 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color, lineHeight: 1, marginBottom: 6 }}>{value}</div>
-              <div style={{ fontSize: 11, color: T.textDim }}>{t(labelKey)}</div>
+              <div style={{ fontSize: 11, color: T.textDim }}>{tplYear ? t(labelKey).replace("{year}", tplYear) : t(labelKey)}</div>
             </div>
           ))}
+        </div>
+
+        {/* Export button */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 22px", borderRadius: 9, border: `1px solid ${T.accent}55`, background: T.accentDim, color: T.accent, fontSize: 13, fontWeight: 600, fontFamily: "Inter, sans-serif", cursor: exporting ? "default" : "pointer", opacity: exporting ? 0.6 : 1, transition: "opacity 0.15s" }}
+          >
+            <span>⬇</span>
+            {exporting ? t("stats.exporting") : t("stats.exportCsv")}
+          </button>
         </div>
       </div>
     </>
@@ -2506,8 +2651,13 @@ function StockCorrectionModal({ product, onClose, onCorrect }) {
 // ─── Lieferungen Tab ──────────────────────────────────────────────────────────
 function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook }) {
   const { t, lang } = useT();
-  const isMobile = useWindowWidth() < 640;
-  const incoming = products.filter(p => p.ankunft).sort((a, b) => new Date(a.ankunft) - new Date(b.ankunft));
+  const isMobile   = useWindowWidth() < 640;
+  const currentYear = new Date().getFullYear();
+  const [yearFilter, setYearFilter] = useState(currentYear);
+
+  const incoming = products
+    .filter(p => p.ankunft && new Date(p.ankunft).getFullYear() === yearFilter)
+    .sort((a, b) => new Date(a.ankunft) - new Date(b.ankunft));
 
   const addButton = (
     <button
@@ -2536,7 +2686,10 @@ function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook
 
   return (
     <div style={{ padding: isMobile ? "12px 12px" : "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>{addButton}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <YearSelector year={yearFilter} onChange={setYearFilter} compact={isMobile} />
+        {addButton}
+      </div>
       {incoming.map(p => {
         const rec          = deliveries.find(d => d.product_id === p.id && d.arrival_date === p.ankunft);
         const wreStatus    = getWreStatus(deliveries, p.id, p.ankunft, p.ankunft_menge);
