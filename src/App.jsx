@@ -194,6 +194,43 @@ const translations = {
     "image.change":             "Bild ändern",
     "history.reason.manual":    "Manuell",
     "history.reason.receipt":   "Wareneingang",
+    "history.reason.fba":       "Zu Amazon FBA gesendet",
+    "history.reason.correction":"Bestandskorrektur",
+    "fba.modal.title":          "→ Amazon senden",
+    "fba.modal.currentLager":   "Lagerbestand",
+    "fba.modal.currentFba":     "FBA-Bestand",
+    "fba.modal.qty":            "Zu sendende Menge",
+    "fba.modal.btn":            "→ Amazon senden",
+    "fba.modal.confirm":        "Senden",
+    "fba.modal.cancel":         "Abbrechen",
+    "fba.modal.saving":         "Wird gesendet...",
+    "fba.modal.err.zero":       "Menge muss größer als 0 sein.",
+    "fba.modal.err.overstock":  "Nicht genug Lagerbestand.",
+    "correction.modal.title":   "Bestand korrigieren",
+    "correction.modal.newLager":"Tatsächlicher Lagerbestand",
+    "correction.modal.newFba":  "Tatsächlicher FBA-Bestand",
+    "correction.modal.reason":  "Grund der Korrektur (optional)",
+    "correction.modal.reasonHint": "z.B. Inventur, Schwund, Beschädigung",
+    "correction.modal.defaultReason": "Manuelle Korrektur",
+    "correction.modal.was":     "War:",
+    "correction.modal.btn":     "Bestand korrigieren",
+    "correction.modal.confirm": "Speichern",
+    "correction.modal.cancel":  "Abbrechen",
+    "correction.modal.saving":  "Speichert...",
+    "correction.modal.err.negative": "Bestände können nicht negativ sein.",
+    "correction.modal.err.noChange": "Keine Änderungen vorgenommen.",
+    "fba.modal.tracking":            "Referenznummer / Tracking (optional)",
+    "fba.modal.expectedArrival":     "Erwartete Ankunft bei Amazon (optional)",
+    "fba.shipments.title":           "FBA Sendungen",
+    "fba.shipments.empty":           "Noch keine Sendungen erfasst.",
+    "fba.shipments.status.pending":  "Ausstehend",
+    "fba.shipments.status.arrived":  "Angekommen",
+    "fba.shipments.status.discrepancy": "Differenz",
+    "fba.shipments.confirm.qty":     "Wie viele Einheiten hat Amazon bestätigt?",
+    "fba.shipments.confirm.save":    "Bestätigen",
+    "fba.shipments.confirm.cancel":  "Abbrechen",
+    "fba.shipments.discrepancy":     "⚠ Differenz: {n} Stück fehlen bei Amazon!",
+    "history.reason.fba_arrival":    "FBA Ankunft bestätigt",
   },
   en: {
     "splash.subtitle":          "Inventory Management",
@@ -382,6 +419,43 @@ const translations = {
     "image.change":             "Change image",
     "history.reason.manual":    "Manual",
     "history.reason.receipt":   "Goods Receipt",
+    "history.reason.fba":       "Sent to Amazon FBA",
+    "history.reason.correction":"Stock Correction",
+    "fba.modal.title":          "→ Send to Amazon",
+    "fba.modal.currentLager":   "Warehouse Stock",
+    "fba.modal.currentFba":     "FBA Stock",
+    "fba.modal.qty":            "Units to send",
+    "fba.modal.btn":            "→ Send to Amazon",
+    "fba.modal.confirm":        "Send",
+    "fba.modal.cancel":         "Cancel",
+    "fba.modal.saving":         "Sending...",
+    "fba.modal.err.zero":       "Quantity must be greater than 0.",
+    "fba.modal.err.overstock":  "Not enough warehouse stock.",
+    "correction.modal.title":   "Correct Stock",
+    "correction.modal.newLager":"Actual Warehouse Stock",
+    "correction.modal.newFba":  "Actual FBA Stock",
+    "correction.modal.reason":  "Reason (optional)",
+    "correction.modal.reasonHint": "e.g. Inventory count, Loss, Damage",
+    "correction.modal.defaultReason": "Manual correction",
+    "correction.modal.was":     "Was:",
+    "correction.modal.btn":     "Correct Stock",
+    "correction.modal.confirm": "Save",
+    "correction.modal.cancel":  "Cancel",
+    "correction.modal.saving":  "Saving...",
+    "correction.modal.err.negative": "Stock cannot be negative.",
+    "correction.modal.err.noChange": "No changes made.",
+    "fba.modal.tracking":            "Reference / Tracking (optional)",
+    "fba.modal.expectedArrival":     "Expected arrival at Amazon (optional)",
+    "fba.shipments.title":           "FBA Shipments",
+    "fba.shipments.empty":           "No shipments tracked yet.",
+    "fba.shipments.status.pending":  "Pending",
+    "fba.shipments.status.arrived":  "Arrived",
+    "fba.shipments.status.discrepancy": "Discrepancy",
+    "fba.shipments.confirm.qty":     "How many units did Amazon confirm?",
+    "fba.shipments.confirm.save":    "Confirm",
+    "fba.shipments.confirm.cancel":  "Cancel",
+    "fba.shipments.discrepancy":     "⚠ Discrepancy: {n} units missing at Amazon!",
+    "history.reason.fba_arrival":    "FBA arrival confirmed",
   },
 };
 
@@ -624,6 +698,30 @@ function useStockHistory(productId) {
   }, [load]);
 
   return { history, loading, write, reload: load };
+}
+
+// ─── Supabase: FBA Sendungen Hook ─────────────────────────────────────────────
+function useFbaShipments(productId) {
+  const [shipments, setShipments] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+
+  const load = useCallback(async () => {
+    if (!productId) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("fba_shipments")
+        .select("*")
+        .eq("product_id", productId)
+        .order("created_at", { ascending: false });
+      if (error) console.warn("[DB] fba_shipments.select FAILED", { code: error.code, msg: error.message });
+      setShipments(data ?? []);
+    } catch (e) { console.warn("[DB] fba_shipments.select exception", e.message); }
+    setLoading(false);
+  }, [productId]);
+
+  useEffect(() => { load(); }, [load]);
+  return { shipments, loading, reload: load };
 }
 
 // ─── Produktbild: client-side resize → base64 (no Storage bucket needed) ────
@@ -890,7 +988,7 @@ function SectionLabel({ children }) {
 }
 
 // ─── Artikel-Karte ────────────────────────────────────────────────────────────
-function ProductCard({ product, onClick, searchMatch, delivery }) {
+function ProductCard({ product, onClick, searchMatch, delivery, fbaTransfer }) {
   const { t, lang } = useT();
   const [hovered, setHovered] = useState(false);
   const status      = getStatus(product);
@@ -994,6 +1092,11 @@ function ProductCard({ product, onClick, searchMatch, delivery }) {
             {tag}
           </span>
         ))}
+        {fbaTransfer > 0 && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(167,139,250,0.10)", border: "1px solid rgba(167,139,250,0.30)", borderRadius: 99, padding: "2px 9px", fontSize: 11, color: "#a78bfa", fontWeight: 600 }}>
+            → {fbaTransfer} Stk. zu Amazon
+          </span>
+        )}
         {searchMatch && (
           <span style={{ display: "inline-flex", alignItems: "center", background: "rgba(250,204,21,0.10)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 99, padding: "2px 8px", fontSize: 10, color: "#facc15" }}>
             ↳ {t(`search.match.${searchMatch}`)}
@@ -1005,7 +1108,7 @@ function ProductCard({ product, onClick, searchMatch, delivery }) {
 }
 
 // ─── Detail-Panel ─────────────────────────────────────────────────────────────
-function DetailPanel({ product, onClose, onSave }) {
+function DetailPanel({ product, onClose, onSave, onFbaTransfer, onStockCorrection, onFbaArrival }) {
   const { t, lang } = useT();
   const [editing,        setEditing]        = useState(false);
   const [form,           setForm]           = useState({ ...product });
@@ -1014,7 +1117,12 @@ function DetailPanel({ product, onClose, onSave }) {
   const [scanning,       setScanning]       = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [tagInput,       setTagInput]       = useState("");
+  const [confirmingId,   setConfirmingId]   = useState(null);
+  const [confirmedQty,   setConfirmedQty]   = useState(0);
+  const [confirmSaving,  setConfirmSaving]  = useState(false);
+  const [confirmError,   setConfirmError]   = useState(null);
   const { history, loading: histLoading }   = useStockHistory(product.id);
+  const { shipments, loading: shipmentsLoading, reload: reloadShipments } = useFbaShipments(product.id);
 
   useEffect(() => { setForm({ ...product }); setEditing(false); setSaveError(null); setTagInput(""); }, [product]);
 
@@ -1182,10 +1290,29 @@ function DetailPanel({ product, onClose, onSave }) {
           })()}
 
           {/* Fortschrittsbalken */}
-          <div style={{ ...glass({ padding: "16px 18px" }), marginBottom: 24 }}>
+          <div style={{ ...glass({ padding: "16px 18px" }), marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: T.textDim, marginBottom: 10 }}>{t("detail.progress.label")}</div>
             <ProgressBar value={total} max={form.min_bestand} status={status} showPercent />
           </div>
+
+          {/* Lager-Aktionen */}
+          {!editing && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+              <button
+                onClick={onFbaTransfer}
+                disabled={form.lager <= 0}
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.06)", color: form.lager > 0 ? T.accent : T.textDim, cursor: form.lager > 0 ? "pointer" : "default", fontSize: 12, fontWeight: 600, fontFamily: "Inter, sans-serif", opacity: form.lager <= 0 ? 0.4 : 1, transition: "all 0.15s", textAlign: "center" }}
+              >
+                {t("fba.modal.btn")}
+              </button>
+              <button
+                onClick={onStockCorrection}
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", color: "#f59e0b", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "Inter, sans-serif", transition: "all 0.15s", textAlign: "center" }}
+              >
+                {t("correction.modal.btn")}
+              </button>
+            </div>
+          )}
 
           <SectionLabel>{t("detail.section.master")}</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
@@ -1311,6 +1438,121 @@ function DetailPanel({ product, onClose, onSave }) {
           <div style={{ ...glass({ padding: "40px 24px", textAlign: "center" }), marginBottom: 24 }}>
             <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.25 }}>📊</div>
             <div style={{ fontSize: 12, color: T.textDim, lineHeight: 1.6 }}>{t("detail.chart.noData")}</div>
+          </div>
+
+          {/* ── FBA Sendungen ── */}
+          <SectionLabel>{t("fba.shipments.title")}</SectionLabel>
+          <div style={{ ...glass({ padding: "14px 16px" }), marginBottom: 20 }}>
+            {shipmentsLoading ? (
+              <div style={{ color: T.textDim, fontSize: 12 }}>…</div>
+            ) : shipments.length === 0 ? (
+              <div style={{ color: T.textDim, fontSize: 12 }}>{t("fba.shipments.empty")}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {shipments.map(s => {
+                  const sentDate = s.sent_date
+                    ? new Date(s.sent_date).toLocaleDateString(DATE_LOCALE[lang], { day: "2-digit", month: "2-digit", year: "numeric" })
+                    : "—";
+                  const expectedDate = s.expected_arrival
+                    ? new Date(s.expected_arrival).toLocaleDateString(DATE_LOCALE[lang], { day: "2-digit", month: "short" })
+                    : null;
+                  const statusColors = {
+                    pending:     { bg: "rgba(250,204,21,0.08)",  border: "rgba(250,204,21,0.25)",  text: "#facc15" },
+                    arrived:     { bg: "rgba(74,222,128,0.08)",  border: "rgba(74,222,128,0.25)",  text: "#4ade80" },
+                    discrepancy: { bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)", text: "#f87171" },
+                  };
+                  const sc = statusColors[s.status] ?? statusColors.pending;
+                  const statusLabel = {
+                    pending:     t("fba.shipments.status.pending"),
+                    arrived:     t("fba.shipments.status.arrived"),
+                    discrepancy: t("fba.shipments.status.discrepancy"),
+                  }[s.status] ?? s.status;
+                  const isConfirming = confirmingId === s.id;
+                  const diff = s.confirmed_quantity != null ? s.sent_quantity - s.confirmed_quantity : 0;
+
+                  return (
+                    <div key={s.id} style={{ borderRadius: 8, border: `1px solid ${sc.border}`, background: sc.bg, padding: "10px 12px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{s.sent_quantity} Stk.</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: sc.text, background: "rgba(0,0,0,0.25)", padding: "2px 7px", borderRadius: 20, border: `1px solid ${sc.border}` }}>
+                              {statusLabel}
+                            </span>
+                            <span style={{ fontSize: 10, color: T.textDim }}>{sentDate}</span>
+                            {expectedDate && s.status === "pending" && (
+                              <span style={{ fontSize: 10, color: T.textDim }}>→ {expectedDate}</span>
+                            )}
+                          </div>
+                          {s.tracking_reference && (
+                            <div style={{ fontSize: 11, color: T.textDim, fontFamily: "monospace" }}>{s.tracking_reference}</div>
+                          )}
+                          {s.status === "discrepancy" && diff > 0 && (
+                            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 600, marginTop: 4 }}>
+                              {t("fba.shipments.discrepancy").replace("{n}", diff)}
+                            </div>
+                          )}
+                          {s.status === "arrived" && s.confirmed_quantity != null && s.confirmed_quantity !== s.sent_quantity && (
+                            <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>
+                              Bestätigt: {s.confirmed_quantity} Stk.
+                            </div>
+                          )}
+                        </div>
+                        {s.status === "pending" && !isConfirming && (
+                          <button
+                            onClick={() => { setConfirmingId(s.id); setConfirmedQty(s.sent_quantity); setConfirmError(null); }}
+                            style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.08)", color: "#4ade80", cursor: "pointer", fontFamily: "Inter, sans-serif" }}
+                          >
+                            ✓ {t("fba.shipments.confirm.save")}
+                          </button>
+                        )}
+                      </div>
+
+                      {isConfirming && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          {confirmError && (
+                            <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{confirmError}</div>
+                          )}
+                          <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6 }}>{t("fba.shipments.confirm.qty")}</div>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input
+                              type="number" min={0} max={s.sent_quantity}
+                              value={confirmedQty}
+                              onChange={e => setConfirmedQty(Number(e.target.value))}
+                              style={{ ...inputStyle, width: 80, textAlign: "center", padding: "6px 8px", fontSize: 14, fontWeight: 700 }}
+                              autoFocus
+                            />
+                            <span style={{ fontSize: 11, color: T.textDim }}>/ {s.sent_quantity} gesendet</span>
+                            <button
+                              onClick={async () => {
+                                setConfirmSaving(true); setConfirmError(null);
+                                try {
+                                  await onFbaArrival(product, s.id, confirmedQty, s.sent_quantity);
+                                  setConfirmingId(null);
+                                  await reloadShipments();
+                                } catch (e) { setConfirmError(e.message); }
+                                setConfirmSaving(false);
+                              }}
+                              disabled={confirmSaving}
+                              style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 6, border: "none", background: "#4ade80", color: "#0d2b22", cursor: confirmSaving ? "default" : "pointer", opacity: confirmSaving ? 0.6 : 1, fontFamily: "Inter, sans-serif" }}
+                            >
+                              {confirmSaving ? "…" : t("fba.shipments.confirm.save")}
+                            </button>
+                            <button
+                              onClick={() => { setConfirmingId(null); setConfirmError(null); }}
+                              disabled={confirmSaving}
+                              style={{ fontSize: 11, padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: T.textDim, cursor: "pointer", fontFamily: "Inter, sans-serif" }}
+                            >
+                              {t("fba.shipments.confirm.cancel")}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ── Lager-Verlauf ── */}
@@ -2018,6 +2260,193 @@ function BookReceiptModal({ product, deliveries, onClose, onBook }) {
   );
 }
 
+// ─── FBA Transfer Modal ───────────────────────────────────────────────────────
+function FbaTransferModal({ product, onClose, onTransfer }) {
+  const { t } = useT();
+  const [qty,             setQty]             = useState(0);
+  const [tracking,        setTracking]        = useState("");
+  const [expectedArrival, setExpectedArrival] = useState("");
+  const [saving,          setSaving]          = useState(false);
+  const [error,           setError]           = useState(null);
+
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  const newLager = product.lager - qty;
+  const valid    = qty > 0 && qty <= product.lager;
+
+  const handleConfirm = async () => {
+    if (qty <= 0)            return setError(t("fba.modal.err.zero"));
+    if (qty > product.lager) return setError(t("fba.modal.err.overstock"));
+    setSaving(true); setError(null);
+    try {
+      await onTransfer(product, qty, tracking.trim() || null, expectedArrival || null);
+      onClose();
+    } catch (e) { setError(e.message); setSaving(false); }
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", zIndex: 401, transform: "translate(-50%,-50%)", width: "min(460px,calc(100vw - 24px))", ...glass({ padding: 0 }), background: "rgba(13,28,22,0.98)", overflow: "hidden", animation: "fadeUp 0.2s ease" }}>
+        <div style={{ padding: "18px 22px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("fba.modal.title")}</div>
+            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>{product.name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: T.textDim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+        </div>
+
+        <div style={{ padding: "18px 22px" }}>
+          {error && <div style={{ ...glass({ padding: "8px 12px" }), marginBottom: 14, borderColor: "rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", fontSize: 13 }}>{error}</div>}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+            <div style={{ ...glass({ padding: "10px 12px", textAlign: "center" }) }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: T.text, lineHeight: 1 }}>{product.lager}</div>
+              <div style={{ fontSize: 10, color: T.textDim, marginTop: 4 }}>{t("fba.modal.currentLager")}</div>
+            </div>
+            <div style={{ ...glass({ padding: "10px 12px", textAlign: "center" }) }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: T.text, lineHeight: 1 }}>{product.amazon_fba}</div>
+              <div style={{ fontSize: 10, color: T.textDim, marginTop: 4 }}>{t("fba.modal.currentFba")}</div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("fba.modal.qty")}</div>
+            <input type="number" min={1} max={product.lager} value={qty || ""}
+              onChange={e => { setQty(Number(e.target.value)); setError(null); }}
+              style={{ ...inputStyle, fontSize: 20, fontWeight: 700, textAlign: "center", padding: "10px 16px" }}
+              autoFocus />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("fba.modal.tracking")}</div>
+            <input type="text" value={tracking} onChange={e => setTracking(e.target.value)}
+              style={inputStyle} placeholder="z.B. FBA15XK3..." />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("fba.modal.expectedArrival")}</div>
+            <input type="date" value={expectedArrival} onChange={e => setExpectedArrival(e.target.value)}
+              style={inputStyle} />
+          </div>
+
+          {valid && (
+            <div style={{ ...glass({ padding: "10px 14px" }), borderColor: "rgba(74,222,128,0.25)", background: "rgba(74,222,128,0.05)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.textDim, marginBottom: 5 }}>
+                <span>{t("fba.modal.currentLager")}</span>
+                <span style={{ color: T.text }}>{product.lager} → <b style={{ color: "#f87171" }}>{newLager}</b></span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.textDim }}>
+                <span>{t("fba.modal.currentFba")}</span>
+                <span style={{ color: "#facc15", fontWeight: 600 }}>{product.amazon_fba} → {t("fba.shipments.status.pending")}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "0 22px 18px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 13, fontFamily: "Inter, sans-serif" }}>{t("fba.modal.cancel")}</button>
+          <button onClick={handleConfirm} disabled={saving || !valid} style={{ padding: "8px 20px", borderRadius: 8, border: "none", cursor: (saving || !valid) ? "default" : "pointer", background: T.accent, color: "#0d2b22", fontSize: 13, fontWeight: 700, fontFamily: "Inter, sans-serif", opacity: (saving || !valid) ? 0.45 : 1, transition: "opacity 0.15s" }}>
+            {saving ? t("fba.modal.saving") : t("fba.modal.confirm")}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Stock Correction Modal ───────────────────────────────────────────────────
+function StockCorrectionModal({ product, onClose, onCorrect }) {
+  const { t } = useT();
+  const [newLager, setNewLager] = useState(product.lager);
+  const [newFba,   setNewFba]   = useState(product.amazon_fba);
+  const [reason,   setReason]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
+
+  useEffect(() => {
+    const h = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  const lagerDelta = newLager - product.lager;
+  const fbaDelta   = newFba   - product.amazon_fba;
+  const hasChanges = lagerDelta !== 0 || fbaDelta !== 0;
+
+  const handleConfirm = async () => {
+    if (newLager < 0 || newFba < 0) return setError(t("correction.modal.err.negative"));
+    if (!hasChanges)                 return setError(t("correction.modal.err.noChange"));
+    setSaving(true); setError(null);
+    try {
+      await onCorrect(product, newLager, newFba, reason.trim() || t("correction.modal.defaultReason"));
+      onClose();
+    } catch (e) { setError(e.message); setSaving(false); }
+  };
+
+  const deltaColor = d => d > 0 ? "#4ade80" : d < 0 ? "#f87171" : T.textDim;
+  const deltaText  = d => d !== 0 ? ` (${d > 0 ? "+" : ""}${d})` : "";
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", zIndex: 401, transform: "translate(-50%,-50%)", width: "min(460px,calc(100vw - 24px))", ...glass({ padding: 0 }), background: "rgba(13,28,22,0.98)", overflow: "hidden", animation: "fadeUp 0.2s ease" }}>
+        <div style={{ padding: "18px 22px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("correction.modal.title")}</div>
+            <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>{product.name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: T.textDim, width: 28, height: 28, borderRadius: 6, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+        </div>
+
+        <div style={{ padding: "18px 22px" }}>
+          {error && <div style={{ ...glass({ padding: "8px 12px" }), marginBottom: 14, borderColor: "rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)", color: "#f87171", fontSize: 13 }}>{error}</div>}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("correction.modal.newLager")}</div>
+              <input type="number" min={0} value={newLager}
+                onChange={e => { setNewLager(Number(e.target.value)); setError(null); }}
+                style={inputStyle} autoFocus />
+              <div style={{ fontSize: 11, marginTop: 4 }}>
+                <span style={{ color: T.textDim }}>{t("correction.modal.was")} {product.lager}</span>
+                {lagerDelta !== 0 && <span style={{ fontWeight: 700, color: deltaColor(lagerDelta) }}>{deltaText(lagerDelta)}</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("correction.modal.newFba")}</div>
+              <input type="number" min={0} value={newFba}
+                onChange={e => { setNewFba(Number(e.target.value)); setError(null); }}
+                style={inputStyle} />
+              <div style={{ fontSize: 11, marginTop: 4 }}>
+                <span style={{ color: T.textDim }}>{t("correction.modal.was")} {product.amazon_fba}</span>
+                {fbaDelta !== 0 && <span style={{ fontWeight: 700, color: deltaColor(fbaDelta) }}>{deltaText(fbaDelta)}</span>}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6, letterSpacing: "0.04em" }}>{t("correction.modal.reason")}</div>
+            <input type="text" value={reason} onChange={e => setReason(e.target.value)}
+              style={inputStyle} placeholder={t("correction.modal.reasonHint")} />
+          </div>
+        </div>
+
+        <div style={{ padding: "0 22px 18px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: T.textDim, cursor: "pointer", fontSize: 13, fontFamily: "Inter, sans-serif" }}>{t("correction.modal.cancel")}</button>
+          <button onClick={handleConfirm} disabled={saving || !hasChanges || newLager < 0 || newFba < 0} style={{ padding: "8px 20px", borderRadius: 8, border: "none", cursor: (saving || !hasChanges) ? "default" : "pointer", background: "#f59e0b", color: "#000", fontSize: 13, fontWeight: 700, fontFamily: "Inter, sans-serif", opacity: (saving || !hasChanges || newLager < 0 || newFba < 0) ? 0.45 : 1, transition: "opacity 0.15s" }}>
+            {saving ? t("correction.modal.saving") : t("correction.modal.confirm")}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Lieferungen Tab ──────────────────────────────────────────────────────────
 function LieferungenView({ products, deliveries, onSelect, onAddDelivery, onBook }) {
   const { t, lang } = useT();
@@ -2317,6 +2746,9 @@ export default function App() {
   const [showNewModal,         setShowNewModal]         = useState(false);
   const [showDeliveryModal,    setShowDeliveryModal]    = useState(false);
   const [bookingProduct,       setBookingProduct]       = useState(null);
+  const [fbaTransferProduct,   setFbaTransferProduct]   = useState(null);
+  const [correctionProduct,    setCorrectionProduct]    = useState(null);
+  const [fbaTransfers,         setFbaTransfers]         = useState({});
   const [dismissedAlerts,      setDismissedAlerts]      = useState(() => new Set());
   const [lang,            setLang]            = useState("de");
   const [searchQuery,     setSearchQuery]     = useState("");
@@ -2391,6 +2823,59 @@ export default function App() {
     }
     await reloadDeliveries();
   }, [bookDelivery, save, reloadDeliveries, t]);
+
+  // FBA Nachschub: deduct lager only, save to fba_shipments (FBA stays pending)
+  const handleFbaTransfer = useCallback(async (product, qty, tracking, expectedArrival) => {
+    const newLager = product.lager - qty;
+    const saved = await save({ ...product, lager: newLager });
+    supabase.from("fba_shipments").insert([{
+      product_id:        product.id,
+      sent_quantity:     qty,
+      tracking_reference: tracking ?? null,
+      expected_arrival:  expectedArrival ?? null,
+      status:            "pending",
+    }]).then(({ error }) => {
+      if (error) console.warn("[DB] fba_shipments.insert FAILED", { code: error.code, msg: error.message });
+    }).catch(e => console.warn("[DB] fba_shipments.insert exception", e.message));
+    supabase.from("stock_history").insert([{
+      product_id: product.id, field: "lager", old_value: product.lager, new_value: newLager, reason: t("history.reason.fba"),
+    }]).then(({ error }) => {
+      if (error) console.warn("[DB] stock_history.insert (handleFbaTransfer) FAILED", { code: error.code, msg: error.message });
+    }).catch(e => console.warn("[DB] stock_history.insert (handleFbaTransfer) exception", e.message));
+    setSelectedProduct(saved);
+    setFbaTransfers(prev => ({ ...prev, [product.id]: qty }));
+  }, [save, t]);
+
+  // FBA Ankunft: confirm shipment received, add to amazon_fba
+  const handleFbaArrival = useCallback(async (product, shipmentId, confirmedQty, sentQty) => {
+    const status = confirmedQty >= sentQty ? "arrived" : "discrepancy";
+    const { error: shipErr } = await supabase.from("fba_shipments")
+      .update({ confirmed_quantity: confirmedQty, status })
+      .eq("id", shipmentId);
+    if (shipErr) console.error("[DB] fba_shipments.update FAILED", { code: shipErr.code, msg: shipErr.message });
+    const newFba = product.amazon_fba + confirmedQty;
+    const saved  = await save({ ...product, amazon_fba: newFba });
+    supabase.from("stock_history").insert([{
+      product_id: product.id, field: "amazon_fba", old_value: product.amazon_fba, new_value: newFba, reason: t("history.reason.fba_arrival"),
+    }]).then(({ error }) => {
+      if (error) console.warn("[DB] stock_history.insert (handleFbaArrival) FAILED", { code: error.code, msg: error.message });
+    }).catch(e => console.warn("[DB] stock_history.insert (handleFbaArrival) exception", e.message));
+    setSelectedProduct(saved);
+  }, [save, t]);
+
+  // Bestandskorrektur: overwrite lager and amazon_fba with actual counts
+  const handleStockCorrection = useCallback(async (product, newLager, newFba, reason) => {
+    const saved = await save({ ...product, lager: newLager, amazon_fba: newFba });
+    const entries = [];
+    if (newLager !== product.lager)      entries.push({ product_id: product.id, field: "lager",      old_value: product.lager,      new_value: newLager, reason });
+    if (newFba   !== product.amazon_fba) entries.push({ product_id: product.id, field: "amazon_fba", old_value: product.amazon_fba, new_value: newFba,   reason });
+    if (entries.length) {
+      supabase.from("stock_history").insert(entries).then(({ error }) => {
+        if (error) console.warn("[DB] stock_history.insert (handleStockCorrection) FAILED", { code: error.code, msg: error.message });
+      }).catch(e => console.warn("[DB] stock_history.insert (handleStockCorrection) exception", e.message));
+    }
+    setSelectedProduct(saved);
+  }, [save]);
 
   const handleModalClose = (createdProduct) => {
     setShowNewModal(false);
@@ -2493,7 +2978,7 @@ export default function App() {
               {filtered.length === 0 ? (
                 <div style={{ gridColumn: "1/-1", textAlign: "center", color: T.textDim, padding: "60px 0" }}>{t("filter.empty")}</div>
               ) : (
-                filtered.map(p => <ProductCard key={p.id} product={p} onClick={setSelectedProduct} searchMatch={getSearchMatch(p, searchQuery)} delivery={deliveries.find(d => d.product_id === p.id && d.arrival_date === p.ankunft)} />)
+                filtered.map(p => <ProductCard key={p.id} product={p} onClick={setSelectedProduct} searchMatch={getSearchMatch(p, searchQuery)} delivery={deliveries.find(d => d.product_id === p.id && d.arrival_date === p.ankunft)} fbaTransfer={fbaTransfers[p.id] ?? 0} />)
               )}
             </div>
           </>
@@ -2523,7 +3008,14 @@ export default function App() {
 
         {/* ── Detail-Panel ── */}
         {selectedProduct && (
-          <DetailPanel product={selectedProduct} onClose={() => setSelectedProduct(null)} onSave={handleSave} />
+          <DetailPanel
+            product={selectedProduct}
+            onClose={() => setSelectedProduct(null)}
+            onSave={handleSave}
+            onFbaTransfer={() => setFbaTransferProduct(selectedProduct)}
+            onStockCorrection={() => setCorrectionProduct(selectedProduct)}
+            onFbaArrival={handleFbaArrival}
+          />
         )}
 
         {/* ── Neuer-Artikel-Modal ── */}
@@ -2543,6 +3035,24 @@ export default function App() {
             deliveries={deliveries}
             onClose={() => setBookingProduct(null)}
             onBook={handleBook}
+          />
+        )}
+
+        {/* ── FBA Nachschub-Modal ── */}
+        {fbaTransferProduct && (
+          <FbaTransferModal
+            product={fbaTransferProduct}
+            onClose={() => setFbaTransferProduct(null)}
+            onTransfer={handleFbaTransfer}
+          />
+        )}
+
+        {/* ── Bestandskorrektur-Modal ── */}
+        {correctionProduct && (
+          <StockCorrectionModal
+            product={correctionProduct}
+            onClose={() => setCorrectionProduct(null)}
+            onCorrect={handleStockCorrection}
           />
         )}
       </div>

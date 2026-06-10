@@ -116,3 +116,21 @@ ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS planned_arrival_date date;
 
 -- ─── Migration: purchase price per delivery ───────────────────────────────────
 ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS einkaufspreis_pro_stueck numeric;
+
+-- ─── FBA Shipments table ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS fba_shipments (
+  id                  uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  product_id          text        REFERENCES products(id) ON DELETE CASCADE,
+  sent_quantity       integer     NOT NULL,
+  confirmed_quantity  integer,
+  tracking_reference  text,
+  expected_arrival    date,
+  sent_date           date        DEFAULT current_date,
+  status              text        NOT NULL DEFAULT 'pending',
+  notes               text,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE fba_shipments DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS fba_shipments_product_id_idx ON fba_shipments(product_id, created_at DESC);
