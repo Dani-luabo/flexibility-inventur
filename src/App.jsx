@@ -498,12 +498,24 @@ function useProducts() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    console.log("[DB] products.select — starting query...");
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .order("name");
-    if (error) setError(error.message);
-    else setProducts(data ?? []);
+    if (error) {
+      console.error("[DB] products.select FAILED", {
+        code:    error.code,
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        status:  error.status,
+      });
+      setError(error.message);
+    } else {
+      console.log("[DB] products.select OK —", data?.length ?? 0, "rows");
+      setProducts(data ?? []);
+    }
     setLoading(false);
   }, []);
 
